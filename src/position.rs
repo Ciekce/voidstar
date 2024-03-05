@@ -568,6 +568,56 @@ impl Position {
     }
 
     #[must_use]
+    pub fn occupancy(&self) -> Bitboard {
+        self.curr_state().occupancy()
+    }
+
+    #[must_use]
+    pub fn black_occupancy(&self) -> Bitboard {
+        self.curr_state().black_occupancy()
+    }
+
+    #[must_use]
+    pub fn white_occupancy(&self) -> Bitboard {
+        self.curr_state().white_occupancy()
+    }
+
+    #[must_use]
+    pub fn color_occupancy(&self, color: Color) -> Bitboard {
+        self.curr_state().color_occupancy(color)
+    }
+
+    #[must_use]
+    pub fn color_at(&self, sq: Square) -> Color {
+        self.curr_state().color_at(sq)
+    }
+
+    #[must_use]
+    pub fn piece_type_at(&self, sq: Square) -> PieceType {
+        self.curr_state().piece_type_at(sq)
+    }
+
+    #[must_use]
+    pub fn piece_at(&self, sq: Square) -> Piece {
+        self.curr_state().piece_at(sq)
+    }
+
+    #[must_use]
+    pub fn key(&self) -> u64 {
+        self.curr_state().key
+    }
+
+    #[must_use]
+    pub fn halfmoves(&self) -> u16 {
+        self.curr_state().halfmove
+    }
+
+    #[must_use]
+    pub fn fullmoves(&self) -> u32 {
+        self.fullmove
+    }
+
+    #[must_use]
     pub fn to_fen(&self) -> String {
         let state = self.curr_state();
 
@@ -640,5 +690,34 @@ impl Position {
         state
             .colored_pieces(PieceType::KING.colored(c))
             .lowest_square()
+    }
+}
+
+impl Display for Position {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        for rank in (0u32..8).rev() {
+            writeln!(f, " +---+---+---+---+---+---+---+---+")?;
+
+            for file in 0u32..8 {
+                let sq = Square::from_coords(rank, file);
+                write!(f, " | {}", self.piece_at(sq).to_char())?;
+            }
+
+            writeln!(f, " | {}", rank + 1)?;
+        }
+
+        writeln!(f, " +---+---+---+---+---+---+---+---+")?;
+        writeln!(f, "   a   b   c   d   e   f   g   h")?;
+        writeln!(f)?;
+
+        write!(
+            f,
+            "{} to move",
+            if self.side_to_move() == Color::BLACK {
+                "Black"
+            } else {
+                "White"
+            }
+        )
     }
 }

@@ -24,7 +24,8 @@ mod keys;
 mod macros;
 mod position;
 mod rng;
+mod uci;
 
 fn main() {
-    //
+    uci::run();
 }
