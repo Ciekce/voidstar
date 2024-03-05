@@ -89,8 +89,6 @@ impl UciHandler {
         let name = args[1usize..idx].join(" ").to_ascii_lowercase();
         let value = args[(idx + 1)..].join(" ");
 
-        println!("'{}' -> '{}'", name, value);
-
         match name.as_str() {
             "uci_chess960" => {
                 if let Ok(new_chess960) = value.to_ascii_lowercase().parse::<bool>() {
