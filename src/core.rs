@@ -143,12 +143,12 @@ impl Square {
 
     #[must_use]
     pub const fn flip_horizontal(&self) -> Self {
-        Self::from_coords(self.rank(), 6 - self.file())
+        Self(self.0 ^ 0b000111)
     }
 
     #[must_use]
     pub const fn flip_vertical(&self) -> Self {
-        Self::from_coords(6 - self.rank(), self.file())
+        Self(self.0 ^ 0b111000)
     }
 }
 
@@ -400,6 +400,26 @@ impl Piece {
     #[must_use]
     pub const fn color(&self) -> Color {
         Color::from_raw(self.value & 1)
+    }
+
+    #[must_use]
+    pub fn to_char(self) -> char {
+        match self {
+            Self::BLACK_PAWN => 'p',
+            Self::BLACK_KNIGHT => 'n',
+            Self::BLACK_BISHOP => 'b',
+            Self::BLACK_ROOK => 'r',
+            Self::BLACK_QUEEN => 'q',
+            Self::BLACK_KING => 'k',
+            Self::WHITE_PAWN => 'P',
+            Self::WHITE_KNIGHT => 'N',
+            Self::WHITE_BISHOP => 'B',
+            Self::WHITE_ROOK => 'R',
+            Self::WHITE_QUEEN => 'Q',
+            Self::WHITE_KING => 'K',
+            Self::NONE => ' ',
+            _ => unreachable!(),
+        }
     }
 
     #[must_use]

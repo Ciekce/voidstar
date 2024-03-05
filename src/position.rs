@@ -19,16 +19,17 @@
 use crate::bitboard::Bitboard;
 use crate::chess_move::ChessMove;
 use crate::core::*;
-use crate::keys;
+use crate::{attacks, keys};
 use std::fmt::{Display, Formatter};
+use std::str::FromStr;
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct RookPair {
     pub black: Square,
     pub white: Square,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct CastlingRooks {
     pub short: RookPair,
     pub long: RookPair,
@@ -230,7 +231,7 @@ impl Default for BoardState {
             colors: [Bitboard::EMPTY; 2],
             pieces: [Bitboard::EMPTY; 6],
             key: 0,
-            castling: CastlingRooks::startpos(),
+            castling: CastlingRooks::empty(),
             last_move: ChessMove::NULL,
             halfmove: 0,
             en_passant: Square::NONE,
@@ -253,6 +254,7 @@ pub enum FenError {
     NotEnoughFiles(u32),
     TooManyFiles(u32),
     InvalidChar(char),
+    InvalidKings,
     InvalidStm,
     InvalidCastling,
     InvalidEnPassant,
@@ -269,6 +271,9 @@ impl Display for FenError {
             FenError::NotEnoughFiles(rank) => write!(f, "Not enough files in rank {}", rank + 1),
             FenError::TooManyFiles(rank) => write!(f, "Too many files in rank {}", rank + 1),
             FenError::InvalidChar(c) => write!(f, "Invalid character '{}' in FEN", c),
+            FenError::InvalidKings => {
+                write!(f, "Invalid kings in FEN (each side must have exactly 1)")
+            }
             FenError::InvalidStm => write!(f, "Invalid side to move in FEN"),
             FenError::InvalidCastling => write!(f, "Invalid castling rights in FEN"),
             FenError::InvalidEnPassant => write!(f, "Invalid en passant square in FEN"),
@@ -347,9 +352,9 @@ impl Position {
 
         let ranks: Vec<&str> = parts[0].split('/').collect();
 
-        if ranks.len() < 7 {
+        if ranks.len() < 8 {
             return Err(FenError::NotEnoughRanks);
-        } else if ranks.len() > 7 {
+        } else if ranks.len() > 8 {
             return Err(FenError::TooManyRanks);
         }
 
@@ -377,11 +382,17 @@ impl Position {
                 }
             }
 
-            if file_idx > 7 {
+            if file_idx > 8 {
                 return Err(FenError::TooManyFiles(rank_idx as u32));
-            } else if file_idx < 7 {
+            } else if file_idx < 8 {
                 return Err(FenError::NotEnoughFiles(rank_idx as u32));
             }
+        }
+
+        if state.colored_pieces(Piece::BLACK_KING).popcount() != 1
+            || state.colored_pieces(Piece::WHITE_KING).popcount() != 1
+        {
+            return Err(FenError::InvalidKings);
         }
 
         if parts[1].len() != 1 {
@@ -394,13 +405,113 @@ impl Position {
             return Err(FenError::InvalidStm);
         };
 
-        if let Ok(halfmove) = parts[2].parse::<u16>() {
+        if parts[2].len() > 4 {
+            return Err(FenError::InvalidCastling);
+        }
+
+        let black_king = state.colored_pieces(Piece::BLACK_KING).lowest_square();
+        let white_king = state.colored_pieces(Piece::WHITE_KING).lowest_square();
+
+        let mut parse_castling = |flag: char| -> Result<(), FenError> {
+            let black = flag.is_lowercase();
+
+            let (king, rank, rook) = if black {
+                (black_king, 7u32, Piece::BLACK_ROOK)
+            } else {
+                (white_king, 0u32, Piece::WHITE_ROOK)
+            };
+
+            if king.rank() != rank {
+                return Err(FenError::InvalidCastling);
+            }
+
+            let (file, short) = if "KQkq".contains(flag) {
+                let short = flag.to_ascii_lowercase() == 'k';
+
+                let (mut candidate, end, step) = if short {
+                    (king.file() as i32 + 1, 8i32, 1i32)
+                } else {
+                    (king.file() as i32 - 1, -1i32, -1i32)
+                };
+
+                if candidate == end {
+                    return Err(FenError::InvalidCastling);
+                }
+
+                let mut file = None;
+
+                while candidate != end {
+                    if state.piece_at(Square::from_coords(rank, candidate as u32)) == rook {
+                        file = Some(candidate as u32);
+                    }
+                    candidate += step;
+                }
+
+                if let Some(file) = file {
+                    (file, short)
+                } else {
+                    return Err(FenError::InvalidCastling);
+                }
+            } else if (flag >= 'a' && flag <= 'h') || (flag >= 'A' && flag <= 'H') {
+                let file = flag.to_ascii_lowercase() as u32 - 'a' as u32;
+                (file, file > king.file())
+            } else {
+                return Err(FenError::InvalidCastling);
+            };
+
+            if king.file() == file {
+                return Err(FenError::InvalidCastling);
+            }
+
+            let sq = Square::from_coords(rank, file);
+
+            let side = if short {
+                &mut state.castling.short
+            } else {
+                &mut state.castling.long
+            };
+
+            if black {
+                side.black = sq;
+            } else {
+                side.white = sq;
+            }
+
+            Ok(())
+        };
+
+        if parts[2] != "-" {
+            for flag in parts[2].chars() {
+                parse_castling(flag)?;
+            }
+        }
+
+        if parts[3] != "-" {
+            if let Ok(sq) = Square::from_str(parts[3]) {
+                let opp = if black_to_move {
+                    Color::WHITE
+                } else {
+                    Color::BLACK
+                };
+                //TODO this does not account for pinned pawns
+                if !(attacks::pawn_attacks(opp, sq)
+                    & state.colored_pieces(PieceType::PAWN.colored(opp.flip())))
+                .is_empty()
+                {
+                    state.en_passant = sq;
+                }
+            } else {
+                return Err(FenError::InvalidEnPassant);
+            }
+        }
+
+        if let Ok(halfmove) = parts[4].parse::<u16>() {
             state.halfmove = halfmove;
         } else {
             return Err(FenError::InvalidHalfmove);
         }
 
-        let fullmove = if let Ok(fullmove) = parts[3].parse::<u32>() {
+        let fullmove = if let Ok(fullmove) = parts[5].parse::<u32>() {
             fullmove
         } else {
             return Err(FenError::InvalidFullmove);
@@ -445,6 +556,83 @@ impl Position {
         if state.en_passant != Square::NONE {
             state.key ^= keys::en_passant(state.en_passant.file())
         }
+    }
+
+    #[must_use]
+    pub fn side_to_move(&self) -> Color {
+        if self.black_to_move {
+            Color::BLACK
+        } else {
+            Color::WHITE
+        }
+    }
+
+    #[must_use]
+    pub fn to_fen(&self) -> String {
+        let state = self.curr_state();
+
+        let mut fen = String::new();
+
+        for rank in (0u32..8).rev() {
+            let mut file: u32 = 0;
+
+            while file < 8 {
+                let sq = Square::from_coords(rank, file);
+
+                match state.piece_at(sq) {
+                    Piece::NONE => {
+                        let mut empty_squares: u32 = 1;
+
+                        while file < 7
+                            && state.piece_type_at(Square::from_coords(rank, file + 1))
+                                == PieceType::NONE
+                        {
+                            file += 1;
+                            empty_squares += 1;
+                        }
+
+                        fen += empty_squares.to_string().as_str();
+                    }
+                    piece => fen.push(piece.to_char()),
+                }
+
+                file += 1;
+            }
+
+            if rank > 0 {
+                fen.push('/');
+            }
+        }
+
+        fen.push(' ');
+        fen.push(self.side_to_move().to_char());
+        fen.push(' ');
+
+        if state.castling == CastlingRooks::empty() {
+            fen += "- ";
+        } else {
+            if state.castling.short.white != Square::NONE {
+                fen.push((b'A' + state.castling.short.white.file() as u8) as char);
+            }
+            if state.castling.long.white != Square::NONE {
+                fen.push((b'A' + state.castling.long.white.file() as u8) as char);
+            }
+            if state.castling.short.black != Square::NONE {
+                fen.push((b'a' + state.castling.short.black.file() as u8) as char);
+            }
+            if state.castling.long.black != Square::NONE {
+                fen.push((b'a' + state.castling.long.black.file() as u8) as char);
+            }
+            fen.push(' ');
+        }
+        //TODO non-shredder fens
+
+        match state.en_passant {
+            Square::NONE => fen.push('-'),
+            sq => fen += sq.to_string().as_str(),
+        };
+
+        fen + format!(" {} {}", state.halfmove, self.fullmove).as_str()
     }
 
     pub fn king_square(&self, c: Color) -> Square {
