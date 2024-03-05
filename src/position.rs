@@ -629,7 +629,7 @@ impl Position {
                     if dst == self.curr_state().en_passant {
                         return Ok(ChessMove::en_passant(src, dst));
                     }
-                },
+                }
                 _ => {}
             }
 
