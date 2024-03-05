@@ -618,7 +618,7 @@ impl Position {
     }
 
     #[must_use]
-    pub fn to_fen(&self) -> String {
+    pub fn to_fen(&self, chess960: bool) -> String {
         let state = self.curr_state();
 
         let mut fen = String::new();
@@ -660,7 +660,7 @@ impl Position {
 
         if state.castling == CastlingRooks::empty() {
             fen += "- ";
-        } else {
+        } else if chess960 {
             if state.castling.short.white != Square::NONE {
                 fen.push((b'A' + state.castling.short.white.file() as u8) as char);
             }
@@ -674,8 +674,21 @@ impl Position {
                 fen.push((b'a' + state.castling.long.black.file() as u8) as char);
             }
             fen.push(' ');
+        } else {
+            if state.castling.short.white != Square::NONE {
+                fen.push('K');
+            }
+            if state.castling.long.white != Square::NONE {
+                fen.push('Q');
+            }
+            if state.castling.short.black != Square::NONE {
+                fen.push('k');
+            }
+            if state.castling.long.black != Square::NONE {
+                fen.push('q');
+            }
+            fen.push(' ');
         }
-        //TODO non-shredder fens
 
         match state.en_passant {
             Square::NONE => fen.push('-'),

@@ -24,6 +24,7 @@ const AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
 
 struct UciHandler {
     pos: Position,
+    chess960: bool,
 }
 
 impl UciHandler {
@@ -31,6 +32,7 @@ impl UciHandler {
     fn new() -> Self {
         Self {
             pos: Position::startpos(),
+            chess960: false,
         }
     }
 
@@ -49,6 +51,7 @@ impl UciHandler {
 
             match cmd[0] {
                 "uci" => self.handle_uci(),
+                "setoption" => self.handle_setoption(&cmd[1..]),
                 "isready" => self.handle_isready(),
                 "position" => self.handle_position(&cmd[1..]),
                 "d" => self.handle_d(),
@@ -63,7 +66,47 @@ impl UciHandler {
     fn handle_uci(&self) {
         println!("id name {} {}", NAME, VERSION);
         println!("id author {}", AUTHORS.replace(':', ", "));
-        println!("uaiok");
+        println!("option name UCI_Chess960 type check default false");
+        println!("uciok");
+    }
+
+    fn handle_setoption(&mut self, args: &[&str]) {
+        if args.len() < 2 || args[0] != "name" {
+            eprintln!("Missing name");
+            return;
+        }
+
+        let mut idx = 1usize;
+        while idx < args.len() && args[idx] != "value" {
+            idx += 1;
+        }
+
+        if idx > args.len() - 2 || args[idx] != "value" {
+            eprintln!("Missing value");
+            return;
+        }
+
+        let name = args[1usize..idx].join(" ").to_ascii_lowercase();
+        let value = args[(idx + 1)..].join(" ");
+
+        println!("'{}' -> '{}'", name, value);
+
+        match name.as_str() {
+            "uci_chess960" => {
+                if let Ok(new_chess960) = value.to_ascii_lowercase().parse::<bool>() {
+                    self.chess960 = new_chess960;
+                    if self.chess960 {
+                        println!("info string enabled Chess960");
+                    } else {
+                        println!("info string disabled Chess960");
+                    }
+                } else {
+                    eprintln!("Invalid bool");
+                    return;
+                }
+            }
+            _ => {}
+        }
     }
 
     fn handle_isready(&self) {
@@ -91,7 +134,7 @@ impl UciHandler {
     fn handle_d(&self) {
         println!("{}", self.pos);
         println!();
-        println!("Fen: {}", self.pos.to_fen());
+        println!("Fen: {}", self.pos.to_fen(self.chess960));
         println!("Key: {:16x}", self.pos.key());
     }
 }
