@@ -17,7 +17,7 @@
  */
 
 use crate::bitboard::Bitboard;
-use crate::chess_move::ChessMove;
+use crate::chess_move::{ChessMove, MoveType};
 use crate::core::*;
 use crate::{attacks, keys};
 use std::fmt::{Display, Formatter};
@@ -170,7 +170,7 @@ impl BoardState {
         *self.color_occupancy_mut(piece.color()) |= mask;
     }
 
-    fn move_piece(&mut self, src: Square, dst: Square, piece: Piece) {
+    fn move_piece<const UPDATE_KEY: bool>(&mut self, src: Square, dst: Square, piece: Piece) {
         debug_assert_ne!(src, Square::NONE);
         debug_assert_ne!(dst, Square::NONE);
         debug_assert_ne!(src, dst);
@@ -182,9 +182,14 @@ impl BoardState {
 
         *self.pieces_mut(piece.piece_type()) ^= mask;
         *self.color_occupancy_mut(piece.color()) ^= mask;
+
+        if UPDATE_KEY {
+            self.key ^= keys::piece_square(piece, src);
+            self.key ^= keys::piece_square(piece, dst);
+        }
     }
 
-    fn move_and_change_piece(
+    fn move_and_change_piece<const UPDATE_KEY: bool>(
         &mut self,
         src: Square,
         dst: Square,
@@ -209,9 +214,14 @@ impl BoardState {
         *self.pieces_mut(dst_piece.piece_type()) ^= dst_mask;
 
         *self.color_occupancy_mut(src_piece.color()) ^= src_mask ^ dst_mask;
+
+        if UPDATE_KEY {
+            self.key ^= keys::piece_square(src_piece, src);
+            self.key ^= keys::piece_square(dst_piece, dst);
+        }
     }
 
-    fn remove_piece(&mut self, sq: Square, piece: Piece) {
+    fn remove_piece<const UPDATE_KEY: bool>(&mut self, sq: Square, piece: Piece) {
         debug_assert_ne!(sq, Square::NONE);
         debug_assert_ne!(piece, Piece::NONE);
 
@@ -221,6 +231,10 @@ impl BoardState {
 
         *self.pieces_mut(piece.piece_type()) ^= mask;
         *self.color_occupancy_mut(piece.color()) ^= mask;
+
+        if UPDATE_KEY {
+            self.key ^= keys::piece_square(piece, sq);
+        }
     }
 }
 
@@ -279,6 +293,26 @@ impl Display for FenError {
             FenError::InvalidEnPassant => write!(f, "Invalid en passant square in FEN"),
             FenError::InvalidHalfmove => write!(f, "Invalid halfmove clock in FEN"),
             FenError::InvalidFullmove => write!(f, "Invalid fullmove number in FEN"),
+        }
+    }
+}
+
+pub enum MoveStrError {
+    InvalidSrc(SquareStrError),
+    InvalidDst(SquareStrError),
+    WrongSize,
+    InvalidPromo,
+    NoMovingPiece,
+}
+
+impl Display for MoveStrError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MoveStrError::InvalidSrc(str_err) => write!(f, "invalid from-square: {}", str_err),
+            MoveStrError::InvalidDst(str_err) => write!(f, "invalid to-square: {}", str_err),
+            MoveStrError::WrongSize => write!(f, "wrong size"),
+            MoveStrError::InvalidPromo => write!(f, "invalid promo piece"),
+            MoveStrError::NoMovingPiece => write!(f, "no moving piece"),
         }
     }
 }
@@ -552,9 +586,209 @@ impl Position {
         }
 
         state.key ^= keys::castling(state.castling);
+        state.key ^= keys::en_passant(state.en_passant)
+    }
 
-        if state.en_passant != Square::NONE {
-            state.key ^= keys::en_passant(state.en_passant.file())
+    pub fn move_from_str(&self, str: &str, chess960: bool) -> Result<ChessMove, MoveStrError> {
+        if str.len() < 4 || str.len() > 5 {
+            return Err(MoveStrError::WrongSize);
+        }
+
+        let src = Square::from_str(&str[0..2]).map_err(|e| MoveStrError::InvalidSrc(e))?;
+        let dst = Square::from_str(&str[2..4]).map_err(|e| MoveStrError::InvalidDst(e))?;
+
+        if str.len() == 5 {
+            if let Some(promo) = PieceType::from_char(str.chars().nth(4).unwrap()) {
+                if promo != PieceType::PAWN && promo != PieceType::KING {
+                    Ok(ChessMove::promotion(src, dst, promo))
+                } else {
+                    Err(MoveStrError::InvalidPromo)
+                }
+            } else {
+                Err(MoveStrError::InvalidPromo)
+            }
+        } else {
+            let moving = self.piece_type_at(src);
+
+            match moving {
+                PieceType::NONE => return Err(MoveStrError::NoMovingPiece),
+                PieceType::KING => {
+                    if chess960 {
+                        if self.piece_at(dst) == PieceType::ROOK.colored(self.color_at(src)) {
+                            return Ok(ChessMove::castling(src, dst));
+                        }
+                    } else if src.file().abs_diff(dst.file()) == 2 {
+                        let rook_file = if src.file() < dst.file() { 7 } else { 0 };
+                        return Ok(ChessMove::castling(
+                            src,
+                            Square::from_coords(src.rank(), rook_file),
+                        ));
+                    }
+                }
+                PieceType::PAWN => {
+                    if dst == self.curr_state().en_passant {
+                        return Ok(ChessMove::en_passant(src, dst));
+                    }
+                },
+                _ => {}
+            }
+
+            Ok(ChessMove::normal(src, dst))
+        }
+    }
+
+    pub fn apply_move<const HISTORY: bool, const UPDATE_KEY: bool>(&mut self, mv: ChessMove) {
+        let stm = self.side_to_move();
+        let opp = stm.flip();
+
+        self.black_to_move = !self.black_to_move;
+
+        let mut new_state = self.curr_state().clone();
+
+        if UPDATE_KEY {
+            self.keys.push(new_state.key);
+            new_state.key ^= keys::stm();
+        }
+
+        if stm == Color::BLACK {
+            self.fullmove += 1;
+        }
+
+        let src = mv.src();
+        let dst = mv.dst();
+        debug_assert_ne!(src, dst);
+
+        let moving = new_state.piece_at(src);
+        debug_assert_ne!(moving, Piece::NONE);
+
+        let (capture_sq, captured) = match mv.move_type() {
+            MoveType::Normal | MoveType::Promotion => {
+                let captured = new_state.piece_at(dst);
+
+                if mv.move_type() == MoveType::Promotion {
+                    new_state.move_and_change_piece::<UPDATE_KEY>(
+                        src,
+                        dst,
+                        moving,
+                        mv.promo().colored(stm),
+                    );
+                } else {
+                    new_state.move_piece::<UPDATE_KEY>(src, dst, moving);
+                }
+
+                (dst, captured)
+            }
+            MoveType::Castling => {
+                let king_dst =
+                    Square::from_coords(src.rank(), if dst.file() > src.file() { 6 } else { 2 });
+                let rook_dst =
+                    Square::from_coords(src.rank(), if dst.file() > src.file() { 5 } else { 3 });
+
+                let rook = PieceType::ROOK.colored(stm);
+                debug_assert_eq!(rook, new_state.piece_at(dst));
+
+                new_state.move_piece::<UPDATE_KEY>(src, king_dst, moving);
+                new_state.move_piece::<UPDATE_KEY>(dst, rook_dst, rook);
+
+                (Square::NONE, Piece::NONE)
+            }
+            MoveType::EnPassant => {
+                debug_assert_eq!(dst, new_state.en_passant);
+                new_state.move_piece::<UPDATE_KEY>(src, dst, PieceType::PAWN.colored(stm));
+                (
+                    Square::from_raw(if stm == Color::BLACK {
+                        dst.raw() + 8
+                    } else {
+                        dst.raw() - 8
+                    }),
+                    PieceType::PAWN.colored(opp),
+                )
+            }
+        };
+
+        let prev_castling = new_state.castling;
+        let prev_ep = new_state.en_passant;
+
+        if captured != Piece::NONE {
+            debug_assert_ne!(captured.color(), moving.color());
+            debug_assert_ne!(captured.piece_type(), PieceType::KING);
+
+            new_state.remove_piece::<UPDATE_KEY>(capture_sq, captured);
+
+            if captured.piece_type() == PieceType::ROOK {
+                if capture_sq == new_state.castling.short.black {
+                    new_state.castling.short.black = Square::NONE;
+                } else if capture_sq == new_state.castling.short.white {
+                    new_state.castling.short.white = Square::NONE;
+                } else if capture_sq == new_state.castling.long.black {
+                    new_state.castling.long.black = Square::NONE;
+                } else if capture_sq == new_state.castling.long.white {
+                    new_state.castling.long.white = Square::NONE;
+                }
+            }
+        }
+
+        new_state.en_passant = Square::NONE;
+
+        if moving.piece_type() == PieceType::PAWN && src.rank().abs_diff(dst.rank()) == 2 {
+            debug_assert_eq!(src.rank(), if stm == Color::BLACK { 6 } else { 1 });
+            debug_assert_eq!(src.file(), dst.file());
+
+            let dst_bit = dst.bit();
+            //TODO does not consider pinned pawns
+            if !((dst_bit.shift_left() | dst_bit.shift_right())
+                & new_state.colored_pieces(PieceType::PAWN.colored(opp)))
+            .is_empty()
+            {
+                new_state.en_passant = Square::from_raw((src.raw() + dst.raw()) / 2);
+            }
+        }
+
+        if moving.piece_type() == PieceType::KING {
+            if stm == Color::BLACK {
+                new_state.castling.short.black = Square::NONE;
+                new_state.castling.long.black = Square::NONE;
+            } else {
+                new_state.castling.short.white = Square::NONE;
+                new_state.castling.long.white = Square::NONE;
+            }
+        }
+
+        if captured == Piece::NONE && moving.piece_type() != PieceType::PAWN {
+            new_state.halfmove += 1;
+        } else {
+            new_state.halfmove = 0;
+        }
+
+        if UPDATE_KEY {
+            if new_state.castling != prev_castling {
+                new_state.key ^= keys::castling(prev_castling);
+                new_state.key ^= keys::castling(new_state.castling);
+            }
+            if new_state.en_passant != prev_ep {
+                new_state.key ^= keys::en_passant(prev_ep);
+                new_state.key ^= keys::en_passant(new_state.en_passant);
+            }
+        }
+
+        if HISTORY {
+            self.states.push(new_state);
+        } else {
+            *self.curr_state_mut() = new_state;
+        }
+    }
+
+    pub fn pop_move<const UPDATE_KEY: bool>(&mut self) {
+        self.states.pop();
+
+        if UPDATE_KEY {
+            self.keys.pop();
+        }
+
+        self.black_to_move = !self.black_to_move;
+
+        if self.black_to_move {
+            self.fullmove -= 1;
         }
     }
 
@@ -615,6 +849,13 @@ impl Position {
     #[must_use]
     pub fn fullmoves(&self) -> u32 {
         self.fullmove
+    }
+
+    pub fn king_square(&self, c: Color) -> Square {
+        let state = self.curr_state();
+        state
+            .colored_pieces(PieceType::KING.colored(c))
+            .lowest_square()
     }
 
     #[must_use]
@@ -696,13 +937,6 @@ impl Position {
         };
 
         fen + format!(" {} {}", state.halfmove, self.fullmove).as_str()
-    }
-
-    pub fn king_square(&self, c: Color) -> Square {
-        let state = self.curr_state();
-        state
-            .colored_pieces(PieceType::KING.colored(c))
-            .lowest_square()
     }
 }
 

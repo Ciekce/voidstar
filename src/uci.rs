@@ -16,7 +16,7 @@
  * along with Voidstar. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::position::Position;
+use crate::position::{MoveStrError, Position};
 
 const NAME: &str = "Voidstar";
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -116,17 +116,37 @@ impl UciHandler {
             return;
         }
 
-        match args[0] {
+        let next = match args[0] {
             "startpos" => {
                 self.pos.reset_to_startpos();
+                1usize
             }
             "fen" => {
                 if let Err(err) = self.pos.reset_from_fen_parts(&args[1..]) {
                     eprintln!("{}", err);
+                    return;
+                }
+                7usize
+            }
+            _ => return,
+        };
+
+        if args.len() <= next {
+            return;
+        } else if args[next] != "moves" {
+            eprintln!("Unknown token '{}'", args[next]);
+            return;
+        }
+
+        for move_str in &args[next + 1..] {
+            match self.pos.move_from_str(move_str, self.chess960) {
+                Ok(m) => self.pos.apply_move::<false, true>(m),
+                Err(err) => {
+                    eprintln!("Invalid move '{}': {}", move_str, err);
+                    return;
                 }
             }
-            _ => {}
-        };
+        }
     }
 
     fn handle_d(&self) {

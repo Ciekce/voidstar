@@ -69,6 +69,10 @@ pub fn castling(rooks: CastlingRooks) -> u64 {
 
 #[must_use]
 #[inline(always)]
-pub fn en_passant(file: u32) -> u64 {
-    KEYS[EN_PASSANT_OFFSET + file as usize]
+pub fn en_passant(sq: Square) -> u64 {
+    if sq == Square::NONE {
+        0
+    } else {
+        KEYS[EN_PASSANT_OFFSET + sq.file() as usize]
+    }
 }

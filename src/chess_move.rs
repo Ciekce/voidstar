@@ -94,7 +94,7 @@ impl ChessMove {
     }
 
     pub fn dst(&self) -> Square {
-        Square::from_raw((self.value >> Self::SRC_SHIFT) as u8 & 0x3F)
+        Square::from_raw((self.value >> Self::DST_SHIFT) as u8 & 0x3F)
     }
 
     pub fn promo(&self) -> PieceType {
@@ -105,46 +105,6 @@ impl ChessMove {
         unsafe { std::mem::transmute((self.value & 0x3) as u8) }
     }
 }
-
-pub enum MoveStrError {
-    InvalidFrom,
-    InvalidTo,
-    InvalidPromo,
-    WrongSize,
-}
-
-/*
-impl FromStr for ChessMove {
-    type Err = MoveStrError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s == "0000" {
-            return Ok(ChessMove::NULL);
-        }
-
-        let promo_piece = if s.len() == 5 {
-            match PieceType::from_char(s.chars().nth(4).unwrap()) {
-                Some(promo) => promo,
-                None => return Err(MoveStrError::InvalidPromo),
-            }
-        } else if s.len() != 4 {
-            return Err(MoveStrError::WrongSize);
-        } else {
-            PieceType::NONE
-        };
-
-        if let Ok(from) = Square::from_str(&s[0..2]) {
-            if let Ok(to) = Square::from_str(&s[2..4]) {
-                todo!();
-            } else {
-                Err(MoveStrError::InvalidTo)
-            }
-        } else {
-            Err(MoveStrError::InvalidFrom)
-        }
-    }
-}
- */
 
 impl Display for ChessMove {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {

@@ -158,6 +158,16 @@ pub enum SquareStrError {
     InvalidRank,
 }
 
+impl Display for SquareStrError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SquareStrError::WrongSize => write!(f, "wrong size"),
+            SquareStrError::InvalidFile => write!(f, "invalid file"),
+            SquareStrError::InvalidRank => write!(f, "invalid rank"),
+        }
+    }
+}
+
 impl FromStr for Square {
     type Err = SquareStrError;
 
@@ -277,11 +287,11 @@ impl PieceType {
     pub fn from_char(c: char) -> Option<Self> {
         match c {
             'p' | 'P' => Some(Self::PAWN),
-            'n' | 'N' => Some(Self::PAWN),
-            'b' | 'B' => Some(Self::PAWN),
-            'r' | 'R' => Some(Self::PAWN),
-            'q' | 'Q' => Some(Self::PAWN),
-            'k' | 'K' => Some(Self::PAWN),
+            'n' | 'N' => Some(Self::KNIGHT),
+            'b' | 'B' => Some(Self::BISHOP),
+            'r' | 'R' => Some(Self::ROOK),
+            'q' | 'Q' => Some(Self::QUEEN),
+            'k' | 'K' => Some(Self::KING),
             _ => None,
         }
     }
