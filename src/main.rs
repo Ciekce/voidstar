@@ -22,7 +22,10 @@ mod chess_move;
 mod core;
 mod keys;
 mod macros;
+mod movegen;
+mod perft;
 mod position;
+mod rays;
 mod rng;
 mod uci;
 

@@ -24,6 +24,7 @@ use crate::core::{Color, Square};
 
 const PAWN_ATTACKS: [[Bitboard; 64]; 2] = [
     array_init!(|sq_idx, 64| {
+        // black
         let sq = Square::from_raw(sq_idx as u8);
         let bit = sq.bit();
 
@@ -35,6 +36,7 @@ const PAWN_ATTACKS: [[Bitboard; 64]; 2] = [
         attacks
     }),
     array_init!(|sq_idx, 64| {
+        // white
         let sq = Square::from_raw(sq_idx as u8);
         let bit = sq.bit();
 
@@ -58,7 +60,7 @@ const KNIGHT_ATTACKS: [Bitboard; 64] = array_init!(|sq_idx, 64| {
     attacks = attacks.or(bit.shift_left().shift_up_left());
     attacks = attacks.or(bit.shift_left().shift_down_left());
     attacks = attacks.or(bit.shift_right().shift_up_right());
-    attacks = attacks.or(bit.shift_left().shift_down_right());
+    attacks = attacks.or(bit.shift_right().shift_down_right());
     attacks = attacks.or(bit.shift_down().shift_down_left());
     attacks = attacks.or(bit.shift_down().shift_down_right());
 
@@ -152,31 +154,31 @@ const FILE_ATTACKS: [[Bitboard; 64]; 64] = array_init!(|sq_idx, 64| {
 
 #[must_use]
 #[inline(always)]
-pub fn black_pawn_attacks(sq: Square) -> Bitboard {
+pub const fn black_pawn_attacks(sq: Square) -> Bitboard {
     PAWN_ATTACKS[0][sq.idx()]
 }
 
 #[must_use]
 #[inline(always)]
-pub fn white_pawn_attacks(sq: Square) -> Bitboard {
+pub const fn white_pawn_attacks(sq: Square) -> Bitboard {
     PAWN_ATTACKS[1][sq.idx()]
 }
 
 #[must_use]
 #[inline(always)]
-pub fn pawn_attacks(c: Color, sq: Square) -> Bitboard {
+pub const fn pawn_attacks(c: Color, sq: Square) -> Bitboard {
     PAWN_ATTACKS[c.idx()][sq.idx()]
 }
 
 #[must_use]
 #[inline(always)]
-pub fn knight_attacks(sq: Square) -> Bitboard {
+pub const fn knight_attacks(sq: Square) -> Bitboard {
     KNIGHT_ATTACKS[sq.idx()]
 }
 
 #[must_use]
 #[inline(always)]
-pub fn bishop_attacks(sq: Square, occupancy: Bitboard) -> Bitboard {
+pub const fn bishop_attacks(sq: Square, occupancy: Bitboard) -> Bitboard {
     let diag = DIAG_ATTACKS[sq.idx()];
     let anti = ANTI_DIAG_ATTACKS[sq.idx()];
 
@@ -206,18 +208,18 @@ pub fn bishop_attacks(sq: Square, occupancy: Bitboard) -> Bitboard {
 
 #[must_use]
 #[inline(always)]
-pub fn rook_attacks(sq: Square, occupancy: Bitboard) -> Bitboard {
+pub const fn rook_attacks(sq: Square, occupancy: Bitboard) -> Bitboard {
     let rank_attacks =
         RANK_ATTACKS[sq.idx()][(occupancy.raw() >> (sq.rank() * 8 + 1)) as usize & 0x3f];
 
     let flip = ((occupancy.raw() >> sq.file()) & Bitboard::FILE_A.raw()).wrapping_mul(DIAG);
     let file_attacks = FILE_ATTACKS[sq.idx()][(flip >> 57) as usize & 0x3f];
 
-    rank_attacks | file_attacks
+    rank_attacks.or(file_attacks)
 }
 
 #[must_use]
 #[inline(always)]
-pub fn king_attacks(sq: Square) -> Bitboard {
+pub const fn king_attacks(sq: Square) -> Bitboard {
     KING_ATTACKS[sq.idx()]
 }

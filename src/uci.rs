@@ -16,6 +16,9 @@
  * along with Voidstar. If not, see <https://www.gnu.org/licenses/>.
  */
 
+use crate::chess_move::{ChessMove, MoveType};
+use crate::movegen::{generate_moves, MoveList};
+use crate::perft::{perft, split_perft};
 use crate::position::{MoveStrError, Position};
 
 const NAME: &str = "Voidstar";
@@ -54,7 +57,11 @@ impl UciHandler {
                 "setoption" => self.handle_setoption(&cmd[1..]),
                 "isready" => self.handle_isready(),
                 "position" => self.handle_position(&cmd[1..]),
+                "move" => self.handle_move(&cmd[1..]),
                 "d" => self.handle_d(),
+                "moves" => self.handle_moves(),
+                "perft" => self.handle_perft(&cmd[1..]),
+                "splitperft" => self.handle_splitperft(&cmd[1..]),
                 "quit" => break,
                 unknown => eprintln!("Unknown command '{}'", unknown),
             }
@@ -140,7 +147,7 @@ impl UciHandler {
 
         for move_str in &args[next + 1..] {
             match self.pos.move_from_str(move_str, self.chess960) {
-                Ok(m) => self.pos.apply_move::<false, true>(m),
+                Ok(mv) => self.pos.apply_move::<false, true>(mv),
                 Err(err) => {
                     eprintln!("Invalid move '{}': {}", move_str, err);
                     return;
@@ -149,11 +156,75 @@ impl UciHandler {
         }
     }
 
+    fn handle_move(&mut self, args: &[&str]) {
+        if args.is_empty() {
+            return;
+        }
+
+        match self.pos.move_from_str(args[0], self.chess960) {
+            Ok(mv) => self.pos.apply_move::<false, true>(mv),
+            Err(err) => eprintln!("Invalid move '{}': {}", args[0], err),
+        }
+    }
+
     fn handle_d(&self) {
         println!("{}", self.pos);
         println!();
         println!("Fen: {}", self.pos.to_fen(self.chess960));
         println!("Key: {:16x}", self.pos.key());
+
+        print!("Checkers:");
+        for checker in self.pos.checkers() {
+            print!(" {}", checker);
+        }
+        println!();
+
+        print!("Pinned:");
+        let all_pinned =
+            self.pos.occupancy() & (self.pos.diag_pin_mask() | self.pos.ortho_pin_mask());
+        for pinned in all_pinned {
+            print!(" {}", pinned);
+        }
+        println!();
+    }
+
+    fn handle_moves(&self) {
+        let mut moves = MoveList::new();
+        generate_moves(&mut moves, &self.pos);
+        println!(
+            "{}",
+            moves
+                .iter()
+                .map(|mv| mv.to_string(self.chess960))
+                .collect::<Vec<String>>()
+                .join(" ")
+        );
+    }
+
+    fn handle_perft(&mut self, args: &[&str]) {
+        if args.is_empty() {
+            eprintln!("Missing depth");
+            return;
+        }
+
+        if let Ok(depth) = args[0].parse::<i32>() {
+            perft(&mut self.pos, depth);
+        } else {
+            eprintln!("Invalid depth");
+        }
+    }
+
+    fn handle_splitperft(&mut self, args: &[&str]) {
+        if args.is_empty() {
+            eprintln!("Missing depth");
+            return;
+        }
+
+        if let Ok(depth) = args[0].parse::<i32>() {
+            split_perft(&mut self.pos, depth, self.chess960);
+        } else {
+            eprintln!("Invalid depth");
+        }
     }
 }
 

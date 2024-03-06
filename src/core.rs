@@ -196,6 +196,10 @@ impl FromStr for Square {
 
 impl Display for Square {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if *self == Square::NONE {
+            return write!(f, "00");
+        }
+
         write!(
             f,
             "{}{}",
@@ -255,7 +259,7 @@ impl Color {
     }
 
     #[must_use]
-    pub fn idx(&self) -> usize {
+    pub const fn idx(&self) -> usize {
         self.value as usize
     }
 }

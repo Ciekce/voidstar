@@ -19,47 +19,90 @@
 use crate::bitboard::Bitboard;
 use crate::chess_move::{ChessMove, MoveType};
 use crate::core::*;
+use crate::rays::ray_between;
 use crate::{attacks, keys};
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct RookPair {
-    pub black: Square,
-    pub white: Square,
+    pub short: Square,
+    pub long: Square,
+}
+
+impl RookPair {
+    fn clear(&mut self) {
+        self.short = Square::NONE;
+        self.long = Square::NONE;
+    }
+
+    fn unset(&mut self, sq: Square) {
+        if sq == self.short {
+            self.short = Square::NONE;
+        } else if sq == self.long {
+            self.long = Square::NONE;
+        }
+    }
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct CastlingRooks {
-    pub short: RookPair,
-    pub long: RookPair,
+    rooks: [RookPair; 2],
 }
 
 impl CastlingRooks {
     fn empty() -> Self {
         Self {
-            short: RookPair {
-                black: Square::NONE,
-                white: Square::NONE,
-            },
-            long: RookPair {
-                black: Square::NONE,
-                white: Square::NONE,
-            },
+            rooks: [
+                RookPair {
+                    short: Square::NONE,
+                    long: Square::NONE,
+                },
+                RookPair {
+                    short: Square::NONE,
+                    long: Square::NONE,
+                },
+            ],
         }
     }
 
     fn startpos() -> Self {
         Self {
-            short: RookPair {
-                black: Square::H8,
-                white: Square::H1,
-            },
-            long: RookPair {
-                black: Square::A8,
-                white: Square::A1,
-            },
+            rooks: [
+                RookPair {
+                    short: Square::H8,
+                    long: Square::A8,
+                },
+                RookPair {
+                    short: Square::H1,
+                    long: Square::A1,
+                },
+            ],
         }
+    }
+
+    pub fn black(&self) -> RookPair {
+        self.rooks[0]
+    }
+
+    pub fn white(&self) -> RookPair {
+        self.rooks[1]
+    }
+
+    fn black_mut(&mut self) -> &mut RookPair {
+        &mut self.rooks[0]
+    }
+
+    fn white_mut(&mut self) -> &mut RookPair {
+        &mut self.rooks[1]
+    }
+
+    pub fn color(&self, c: Color) -> RookPair {
+        self.rooks[c.idx()]
+    }
+
+    fn color_mut(&mut self, c: Color) -> &mut RookPair {
+        &mut self.rooks[c.idx()]
     }
 }
 
@@ -67,9 +110,11 @@ impl CastlingRooks {
 struct BoardState {
     colors: [Bitboard; 2],
     pieces: [Bitboard; 6],
+    checkers: Bitboard,
+    diag_pin_mask: Bitboard,
+    ortho_pin_mask: Bitboard,
     key: u64,
     castling: CastlingRooks,
-    last_move: ChessMove,
     halfmove: u16,
     en_passant: Square,
 }
@@ -160,6 +205,11 @@ impl BoardState {
         unreachable!();
     }
 
+    fn king_square(&self, c: Color) -> Square {
+        self.colored_pieces(PieceType::KING.colored(c))
+            .lowest_square()
+    }
+
     fn set_piece(&mut self, sq: Square, piece: Piece) {
         debug_assert_ne!(sq, Square::NONE);
         debug_assert_ne!(piece, Piece::NONE);
@@ -173,10 +223,8 @@ impl BoardState {
     fn move_piece<const UPDATE_KEY: bool>(&mut self, src: Square, dst: Square, piece: Piece) {
         debug_assert_ne!(src, Square::NONE);
         debug_assert_ne!(dst, Square::NONE);
-        debug_assert_ne!(src, dst);
 
         debug_assert_ne!(piece, Piece::NONE);
-        debug_assert_eq!(self.piece_at(src), piece);
 
         let mask = src.bit() ^ dst.bit();
 
@@ -225,8 +273,6 @@ impl BoardState {
         debug_assert_ne!(sq, Square::NONE);
         debug_assert_ne!(piece, Piece::NONE);
 
-        debug_assert_eq!(self.piece_at(sq), piece);
-
         let mask = sq.bit();
 
         *self.pieces_mut(piece.piece_type()) ^= mask;
@@ -244,9 +290,11 @@ impl Default for BoardState {
         Self {
             colors: [Bitboard::EMPTY; 2],
             pieces: [Bitboard::EMPTY; 6],
+            checkers: Bitboard::EMPTY,
+            diag_pin_mask: Bitboard::EMPTY,
+            ortho_pin_mask: Bitboard::EMPTY,
             key: 0,
             castling: CastlingRooks::empty(),
-            last_move: ChessMove::NULL,
             halfmove: 0,
             en_passant: Square::NONE,
         }
@@ -366,9 +414,11 @@ impl Position {
                 Bitboard::from_raw(0x0800000000000008),
                 Bitboard::from_raw(0x1000000000000010),
             ],
+            checkers: Bitboard::EMPTY,
+            diag_pin_mask: Bitboard::EMPTY,
+            ortho_pin_mask: Bitboard::EMPTY,
             key: 0,
             castling: CastlingRooks::startpos(),
-            last_move: ChessMove::NULL,
             halfmove: 0,
             en_passant: Square::NONE,
         });
@@ -377,6 +427,7 @@ impl Position {
         self.fullmove = 1;
 
         self.regen_curr_key();
+        self.update_checkers_and_pins();
     }
 
     pub fn reset_from_fen_parts(&mut self, parts: &[&str]) -> Result<(), FenError> {
@@ -499,16 +550,16 @@ impl Position {
 
             let sq = Square::from_coords(rank, file);
 
-            let side = if short {
-                &mut state.castling.short
+            let rooks = if black {
+                state.castling.black_mut()
             } else {
-                &mut state.castling.long
+                state.castling.white_mut()
             };
 
-            if black {
-                side.black = sq;
+            if short {
+                rooks.short = sq;
             } else {
-                side.white = sq;
+                rooks.long = sq;
             }
 
             Ok(())
@@ -560,6 +611,7 @@ impl Position {
         self.keys.clear();
 
         self.regen_curr_key();
+        self.update_checkers_and_pins();
 
         Ok(())
     }
@@ -589,13 +641,53 @@ impl Position {
         state.key ^= keys::en_passant(state.en_passant)
     }
 
+    fn update_checkers_and_pins(&mut self) {
+        let stm = self.side_to_move();
+        let nstm = stm.flip();
+
+        let king = self.king_square(stm);
+        let checkers = self.attackers_to(king, nstm);
+
+        let state = self.curr_state_mut();
+
+        state.checkers = checkers;
+
+        let us = state.color_occupancy(stm);
+        let them = state.color_occupancy(nstm);
+
+        let their_queens = state.colored_pieces(PieceType::QUEEN.colored(nstm));
+
+        let their_diag = their_queens | state.colored_pieces(PieceType::BISHOP.colored(nstm));
+        let their_ortho = their_queens | state.colored_pieces(PieceType::ROOK.colored(nstm));
+
+        let potential_diag_pinners = their_diag & attacks::bishop_attacks(king, them);
+        let potential_ortho_pinners = their_ortho & attacks::rook_attacks(king, them);
+
+        state.diag_pin_mask = Bitboard::EMPTY;
+        state.ortho_pin_mask = Bitboard::EMPTY;
+
+        for pinner in potential_diag_pinners {
+            let potentially_pinned = ray_between(king, pinner).with(pinner);
+            if (potentially_pinned & us).contains_one() {
+                state.diag_pin_mask |= potentially_pinned;
+            }
+        }
+
+        for pinner in potential_ortho_pinners {
+            let potentially_pinned = ray_between(king, pinner).with(pinner);
+            if (potentially_pinned & us).contains_one() {
+                state.ortho_pin_mask |= potentially_pinned;
+            }
+        }
+    }
+
     pub fn move_from_str(&self, str: &str, chess960: bool) -> Result<ChessMove, MoveStrError> {
         if str.len() < 4 || str.len() > 5 {
             return Err(MoveStrError::WrongSize);
         }
 
-        let src = Square::from_str(&str[0..2]).map_err(|e| MoveStrError::InvalidSrc(e))?;
-        let dst = Square::from_str(&str[2..4]).map_err(|e| MoveStrError::InvalidDst(e))?;
+        let src = Square::from_str(&str[0..2]).map_err(MoveStrError::InvalidSrc)?;
+        let dst = Square::from_str(&str[2..4]).map_err(MoveStrError::InvalidDst)?;
 
         if str.len() == 5 {
             if let Some(promo) = PieceType::from_char(str.chars().nth(4).unwrap()) {
@@ -639,7 +731,7 @@ impl Position {
 
     pub fn apply_move<const HISTORY: bool, const UPDATE_KEY: bool>(&mut self, mv: ChessMove) {
         let stm = self.side_to_move();
-        let opp = stm.flip();
+        let nstm = stm.flip();
 
         self.black_to_move = !self.black_to_move;
 
@@ -680,9 +772,9 @@ impl Position {
             }
             MoveType::Castling => {
                 let king_dst =
-                    Square::from_coords(src.rank(), if dst.file() > src.file() { 6 } else { 2 });
+                    Square::from_coords(src.rank(), if mv.is_short_castling() { 6 } else { 2 });
                 let rook_dst =
-                    Square::from_coords(src.rank(), if dst.file() > src.file() { 5 } else { 3 });
+                    Square::from_coords(src.rank(), if mv.is_short_castling() { 5 } else { 3 });
 
                 let rook = PieceType::ROOK.colored(stm);
                 debug_assert_eq!(rook, new_state.piece_at(dst));
@@ -701,7 +793,7 @@ impl Position {
                     } else {
                         dst.raw() - 8
                     }),
-                    PieceType::PAWN.colored(opp),
+                    PieceType::PAWN.colored(nstm),
                 )
             }
         };
@@ -716,17 +808,19 @@ impl Position {
             new_state.remove_piece::<UPDATE_KEY>(capture_sq, captured);
 
             if captured.piece_type() == PieceType::ROOK {
-                if capture_sq == new_state.castling.short.black {
-                    new_state.castling.short.black = Square::NONE;
-                } else if capture_sq == new_state.castling.short.white {
-                    new_state.castling.short.white = Square::NONE;
-                } else if capture_sq == new_state.castling.long.black {
-                    new_state.castling.long.black = Square::NONE;
-                } else if capture_sq == new_state.castling.long.white {
-                    new_state.castling.long.white = Square::NONE;
-                }
+                new_state.castling.color_mut(nstm).unset(capture_sq)
             }
         }
+
+        debug_assert_eq!(
+            new_state.occupancy(),
+            new_state.pieces(PieceType::PAWN)
+                | new_state.pieces(PieceType::KNIGHT)
+                | new_state.pieces(PieceType::BISHOP)
+                | new_state.pieces(PieceType::ROOK)
+                | new_state.pieces(PieceType::QUEEN)
+                | new_state.pieces(PieceType::KING)
+        );
 
         new_state.en_passant = Square::NONE;
 
@@ -737,7 +831,7 @@ impl Position {
             let dst_bit = dst.bit();
             //TODO does not consider pinned pawns
             if !((dst_bit.shift_left() | dst_bit.shift_right())
-                & new_state.colored_pieces(PieceType::PAWN.colored(opp)))
+                & new_state.colored_pieces(PieceType::PAWN.colored(nstm)))
             .is_empty()
             {
                 new_state.en_passant = Square::from_raw((src.raw() + dst.raw()) / 2);
@@ -745,13 +839,9 @@ impl Position {
         }
 
         if moving.piece_type() == PieceType::KING {
-            if stm == Color::BLACK {
-                new_state.castling.short.black = Square::NONE;
-                new_state.castling.long.black = Square::NONE;
-            } else {
-                new_state.castling.short.white = Square::NONE;
-                new_state.castling.long.white = Square::NONE;
-            }
+            new_state.castling.color_mut(stm).clear();
+        } else if moving.piece_type() == PieceType::ROOK {
+            new_state.castling.color_mut(stm).unset(src);
         }
 
         if captured == Piece::NONE && moving.piece_type() != PieceType::PAWN {
@@ -776,6 +866,8 @@ impl Position {
         } else {
             *self.curr_state_mut() = new_state;
         }
+
+        self.update_checkers_and_pins();
     }
 
     pub fn pop_move<const UPDATE_KEY: bool>(&mut self) {
@@ -822,6 +914,16 @@ impl Position {
     }
 
     #[must_use]
+    pub fn pieces(&self, piece: PieceType) -> Bitboard {
+        self.curr_state().pieces(piece)
+    }
+
+    #[must_use]
+    pub fn colored_pieces(&self, piece: Piece) -> Bitboard {
+        self.curr_state().colored_pieces(piece)
+    }
+
+    #[must_use]
     pub fn color_at(&self, sq: Square) -> Color {
         self.curr_state().color_at(sq)
     }
@@ -851,11 +953,113 @@ impl Position {
         self.fullmove
     }
 
+    #[must_use]
+    pub fn en_passant(&self) -> Square {
+        self.curr_state().en_passant
+    }
+
+    #[must_use]
     pub fn king_square(&self, c: Color) -> Square {
+        self.curr_state().king_square(c)
+    }
+
+    #[must_use]
+    pub fn diag_pin_mask(&self) -> Bitboard {
+        self.curr_state().diag_pin_mask
+    }
+
+    #[must_use]
+    pub fn ortho_pin_mask(&self) -> Bitboard {
+        self.curr_state().ortho_pin_mask
+    }
+
+    #[must_use]
+    pub fn checkers(&self) -> Bitboard {
+        self.curr_state().checkers
+    }
+
+    #[must_use]
+    pub fn castling(&self) -> CastlingRooks {
+        self.curr_state().castling
+    }
+
+    #[must_use]
+    pub fn is_attacked_occ(&self, sq: Square, occupancy: Bitboard) -> bool {
+        let stm = self.side_to_move();
+        let nstm = stm.flip();
+
         let state = self.curr_state();
-        state
-            .colored_pieces(PieceType::KING.colored(c))
-            .lowest_square()
+
+        let knights = state.colored_pieces(PieceType::KNIGHT.colored(nstm));
+        if !(attacks::knight_attacks(sq) & knights).is_empty() {
+            return true;
+        }
+
+        let pawns = state.colored_pieces(PieceType::PAWN.colored(nstm));
+        if !(attacks::pawn_attacks(stm, sq) & pawns).is_empty() {
+            return true;
+        }
+
+        let kings = state.colored_pieces(PieceType::KING.colored(nstm));
+        if !(attacks::king_attacks(sq) & kings).is_empty() {
+            return true;
+        }
+
+        let queens = state.colored_pieces(PieceType::QUEEN.colored(nstm));
+
+        let rooks = queens | state.colored_pieces(PieceType::ROOK.colored(nstm));
+        if !(attacks::rook_attacks(sq, occupancy) & rooks).is_empty() {
+            return true;
+        }
+
+        let bishops = queens | state.colored_pieces(PieceType::BISHOP.colored(nstm));
+        if !(attacks::bishop_attacks(sq, occupancy) & bishops).is_empty() {
+            return true;
+        }
+
+        false
+    }
+
+    #[must_use]
+    pub fn is_attacked(&self, sq: Square) -> bool {
+        self.is_attacked_occ(sq, self.occupancy())
+    }
+
+    #[must_use]
+    pub fn any_attacked(&self, squares: Bitboard) -> bool {
+        for sq in squares {
+            if self.is_attacked(sq) {
+                return true;
+            }
+        }
+        false
+    }
+
+    #[must_use]
+    pub fn attackers_to(&self, sq: Square, attacker: Color) -> Bitboard {
+        let state = self.curr_state();
+        let occ = self.occupancy();
+
+        let mut attackers = Bitboard::EMPTY;
+
+        let pawns = state.colored_pieces(PieceType::PAWN.colored(attacker));
+        attackers |= pawns & attacks::pawn_attacks(attacker.flip(), sq);
+
+        let knights = state.colored_pieces(PieceType::KNIGHT.colored(attacker));
+        attackers |= knights & attacks::knight_attacks(sq);
+
+        let kings = state.colored_pieces(PieceType::KING.colored(attacker));
+        attackers |= kings & attacks::king_attacks(sq);
+
+        let queens = state.colored_pieces(PieceType::QUEEN.colored(attacker));
+
+        let bishops = queens | state.colored_pieces(PieceType::BISHOP.colored(attacker));
+        attackers |= bishops & attacks::bishop_attacks(sq, occ);
+
+        let rooks = queens | state.colored_pieces(PieceType::ROOK.colored(attacker));
+        attackers |= rooks & attacks::rook_attacks(sq, occ);
+
+        attackers
     }
 
     #[must_use]
@@ -902,30 +1106,30 @@ impl Position {
         if state.castling == CastlingRooks::empty() {
             fen += "- ";
         } else if chess960 {
-            if state.castling.short.white != Square::NONE {
-                fen.push((b'A' + state.castling.short.white.file() as u8) as char);
+            if state.castling.white().short != Square::NONE {
+                fen.push((b'A' + state.castling.white().short.file() as u8) as char);
             }
-            if state.castling.long.white != Square::NONE {
-                fen.push((b'A' + state.castling.long.white.file() as u8) as char);
+            if state.castling.white().long != Square::NONE {
+                fen.push((b'A' + state.castling.white().long.file() as u8) as char);
             }
-            if state.castling.short.black != Square::NONE {
-                fen.push((b'a' + state.castling.short.black.file() as u8) as char);
+            if state.castling.black().short != Square::NONE {
+                fen.push((b'a' + state.castling.black().short.file() as u8) as char);
             }
-            if state.castling.long.black != Square::NONE {
-                fen.push((b'a' + state.castling.long.black.file() as u8) as char);
+            if state.castling.black().long != Square::NONE {
+                fen.push((b'a' + state.castling.black().long.file() as u8) as char);
             }
             fen.push(' ');
         } else {
-            if state.castling.short.white != Square::NONE {
+            if state.castling.white().short != Square::NONE {
                 fen.push('K');
             }
-            if state.castling.long.white != Square::NONE {
+            if state.castling.white().long != Square::NONE {
                 fen.push('Q');
             }
-            if state.castling.short.black != Square::NONE {
+            if state.castling.black().short != Square::NONE {
                 fen.push('k');
             }
-            if state.castling.long.black != Square::NONE {
+            if state.castling.black().long != Square::NONE {
                 fen.push('q');
             }
             fen.push(' ');

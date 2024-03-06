@@ -59,10 +59,10 @@ pub fn castling(rooks: CastlingRooks) -> u64 {
 
     let mut flags = 0usize;
 
-    flags |= usize::from(rooks.short.black != Square::NONE) << BLACK_SHORT_SHIFT;
-    flags |= usize::from(rooks.long.black != Square::NONE) << BLACK_LONG_SHIFT;
-    flags |= usize::from(rooks.short.white != Square::NONE) << WHITE_SHORT_SHIFT;
-    flags |= usize::from(rooks.long.white != Square::NONE) << WHITE_LONG_SHIFT;
+    flags |= usize::from(rooks.black().short != Square::NONE) << BLACK_SHORT_SHIFT;
+    flags |= usize::from(rooks.black().long != Square::NONE) << BLACK_LONG_SHIFT;
+    flags |= usize::from(rooks.white().short != Square::NONE) << WHITE_SHORT_SHIFT;
+    flags |= usize::from(rooks.white().long != Square::NONE) << WHITE_LONG_SHIFT;
 
     KEYS[CASTLING_OFFSET + flags]
 }

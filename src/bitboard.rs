@@ -16,7 +16,7 @@
  * along with Voidstar. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::core::Square;
+use crate::core::{Color, Square};
 use std::fmt::{Display, Formatter};
 use std::ops::*;
 
@@ -69,7 +69,12 @@ impl Bitboard {
 
     #[must_use]
     pub const fn contains_multiple(&self) -> bool {
-        self.value != self.value & (self.value - 1)
+        (self.value & self.value.wrapping_sub(1)) != 0
+    }
+
+    #[must_use]
+    pub const fn contains_one(&self) -> bool {
+        !self.is_empty() && !self.contains_multiple()
     }
 
     #[must_use]
@@ -174,7 +179,7 @@ impl Bitboard {
     pub const fn shift_left(&self) -> Self {
         const MASK: Bitboard = Bitboard::FILE_H.inverse();
         Self {
-            value: self.value << 1,
+            value: self.value >> 1,
         }
         .and(MASK)
     }
@@ -183,7 +188,7 @@ impl Bitboard {
     pub const fn shift_right(&self) -> Self {
         const MASK: Bitboard = Bitboard::FILE_A.inverse();
         Self {
-            value: self.value >> 1,
+            value: self.value << 1,
         }
         .and(MASK)
     }
@@ -220,6 +225,54 @@ impl Bitboard {
         const MASK: Bitboard = Bitboard::FILE_A.inverse();
         Self {
             value: self.value >> 7,
+        }
+        .and(MASK)
+    }
+
+    #[must_use]
+    pub const fn shift_up_relative(&self, c: Color) -> Self {
+        Self {
+            value: if c.raw() == Color::BLACK.raw() {
+                self.value >> 8
+            } else {
+                self.value << 8
+            },
+        }
+    }
+
+    #[must_use]
+    pub const fn shift_down_relative(&self, c: Color) -> Self {
+        Self {
+            value: if c.raw() == Color::BLACK.raw() {
+                self.value << 8
+            } else {
+                self.value >> 8
+            },
+        }
+    }
+
+    #[must_use]
+    pub const fn shift_up_left_relative(&self, c: Color) -> Self {
+        const MASK: Bitboard = Bitboard::FILE_H.inverse();
+        Self {
+            value: if c.raw() == Color::BLACK.raw() {
+                self.value >> 9
+            } else {
+                self.value << 7
+            },
+        }
+        .and(MASK)
+    }
+
+    #[must_use]
+    pub const fn shift_up_right_relative(&self, c: Color) -> Self {
+        const MASK: Bitboard = Bitboard::FILE_A.inverse();
+        Self {
+            value: if c.raw() == Color::BLACK.raw() {
+                self.value >> 7
+            } else {
+                self.value << 9
+            },
         }
         .and(MASK)
     }
