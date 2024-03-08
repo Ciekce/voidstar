@@ -77,6 +77,7 @@ pub struct Searcher {
     tree: Vec<Node>,
     rng: Jsf64Rng,
     pos: Position,
+    depth: u32,
 }
 
 impl Searcher {
@@ -85,6 +86,7 @@ impl Searcher {
             tree: Vec::new(),
             rng: Jsf64Rng::new(69420),
             pos: Position::empty(),
+            depth: 0,
         }
     }
 
@@ -107,6 +109,7 @@ impl Searcher {
                 }
 
                 self.pos.apply_move::<false, true>(node.mv);
+                self.depth += 1;
             }
 
             // if the node isn't terminal and has no children, it has not been expanded
@@ -252,10 +255,15 @@ impl Searcher {
         self.tree.push(Node::new(0, ChessMove::NULL));
 
         let start = Instant::now();
+
         let mut nodes = 0usize;
+
+        let mut max_depth = 0u32;
+        let mut total_depth = 0usize;
 
         while !limiter.should_stop(nodes) {
             self.pos = pos.clone();
+            self.depth = 1;
 
             let leaf = self.select();
             let node = &self.tree[leaf as usize];
@@ -268,7 +276,15 @@ impl Searcher {
             self.backprop(leaf, u);
 
             nodes += 1;
+
+            if self.depth > max_depth {
+                max_depth = self.depth;
+            }
+
+            total_depth += self.depth as usize;
         }
+
+        let average_depth = (total_depth as f64 / nodes as f64).round() as u32;
 
         let time = start.elapsed().as_secs_f64();
         let ms = (time * 1000.0).round() as usize;
@@ -292,8 +308,8 @@ impl Searcher {
         self.tree.shrink_to_fit();
 
         print!(
-            "info depth 1 nodes {} time {} nps {} score cp {} pv",
-            nodes, ms, nps, cp
+            "info depth {} seldepth {} nodes {} time {} nps {} score cp {} pv",
+            average_depth, max_depth, nodes, ms, nps, cp
         );
 
         for mv in &pv {
