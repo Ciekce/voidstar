@@ -295,7 +295,8 @@ impl UciHandler {
             limiter = Some(SearchLimiter::infinite());
         }
 
-        self.searcher .search(&self.pos, limiter.unwrap().clone(), self.chess960);
+        self.searcher
+            .search(&self.pos, limiter.unwrap().clone(), self.chess960);
     }
 
     fn handle_move(&mut self, args: &[&str]) {

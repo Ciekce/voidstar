@@ -17,11 +17,12 @@
  */
 
 use crate::chess_move::ChessMove;
+use crate::core::{Color, PieceType};
+use crate::limit::SearchLimiter;
 use crate::movegen::{generate_moves, MoveList};
 use crate::position::Position;
 use crate::rng::Jsf64Rng;
 use std::time::Instant;
-use crate::limit::SearchLimiter;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[repr(u8)]
@@ -154,29 +155,23 @@ impl Searcher {
         }
     }
 
-    fn simulate(&mut self, node_idx: u32) -> f32 {
-        fn playout(pos: &mut Position, rng: &mut Jsf64Rng) -> f32 {
-            let mut moves = MoveList::new();
-            generate_moves(&mut moves, pos);
-
-            if moves.is_empty() {
-                return if pos.is_in_check() { 0.0 } else { 0.5 };
-            }
-
-            let mv = moves[rng.next_u32_bounded(moves.len() as u32) as usize];
-            pos.apply_move::<false, true>(mv);
-
-            if pos.is_drawn(false) {
-                0.5
-            } else {
-                1.0 - playout(pos, rng)
-            }
-        }
-
+    fn simulate(&self, node_idx: u32) -> f32 {
         let node = &self.tree[node_idx as usize];
-        node.result
-            .u()
-            .unwrap_or_else(|| playout(&mut self.pos, &mut self.rng))
+        node.result.u().unwrap_or_else(|| {
+            fn material(pos: &Position, c: Color) -> i32 {
+                (pos.colored_pieces(PieceType::PAWN.colored(c)).popcount() * 100
+                    + pos.colored_pieces(PieceType::KNIGHT.colored(c)).popcount() * 300
+                    + pos.colored_pieces(PieceType::BISHOP.colored(c)).popcount() * 300
+                    + pos.colored_pieces(PieceType::ROOK.colored(c)).popcount() * 500
+                    + pos.colored_pieces(PieceType::QUEEN.colored(c)).popcount() * 900)
+                    as i32
+            }
+
+            let stm = self.pos.side_to_move();
+            let eval = material(&self.pos, stm) - material(&self.pos, stm.flip());
+
+            1.0 / (1.0 + (-eval as f32 / 400.0).exp())
+        })
     }
 
     fn backprop(&mut self, mut node_idx: u32, mut u: f32) {
