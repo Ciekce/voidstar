@@ -87,9 +87,8 @@ impl Searcher {
         }
     }
 
-    #[allow(clippy::unused_self)]
     pub fn new_game(&mut self) {
-        //
+        self.rng = Jsf64Rng::new(69420);
     }
 
     fn select(&mut self) -> u32 {
