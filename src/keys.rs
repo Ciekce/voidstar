@@ -32,6 +32,7 @@ const STM_OFFSET: usize = PIECE_SQUARE_OFFSET + PIECE_SQUARE_SIZE;
 const CASTLING_OFFSET: usize = STM_OFFSET + STM_SIZE;
 const EN_PASSANT_OFFSET: usize = CASTLING_OFFSET + CASTLING_SIZE;
 
+#[allow(clippy::unreadable_literal)]
 const KEYS: [u64; TOTAL_SIZE] = rng::fill_u64_array(0x3dd6ea8df208fc53);
 
 #[must_use]

@@ -16,6 +16,19 @@
  * along with Voidstar. If not, see <https://www.gnu.org/licenses/>.
  */
 
+#![warn(clippy::pedantic)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_possible_wrap)]
+#![allow(clippy::cast_precision_loss)]
+#![allow(clippy::cast_sign_loss)]
+#![allow(clippy::inline_always)]
+#![allow(clippy::match_on_vec_items)]
+#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::similar_names)]
+#![allow(clippy::too_many_lines)]
+#![allow(clippy::uninlined_format_args)]
+#![allow(clippy::wildcard_imports)]
+
 mod attacks;
 mod bitboard;
 mod chess_move;

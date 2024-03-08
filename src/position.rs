@@ -81,11 +81,11 @@ impl CastlingRooks {
         }
     }
 
-    pub fn black(&self) -> RookPair {
+    pub fn black(self) -> RookPair {
         self.rooks[0]
     }
 
-    pub fn white(&self) -> RookPair {
+    pub fn white(self) -> RookPair {
         self.rooks[1]
     }
 
@@ -97,7 +97,7 @@ impl CastlingRooks {
         &mut self.rooks[1]
     }
 
-    pub fn color(&self, c: Color) -> RookPair {
+    pub fn color(self, c: Color) -> RookPair {
         self.rooks[c.idx()]
     }
 
@@ -365,6 +365,7 @@ impl Display for MoveStrError {
     }
 }
 
+#[allow(unused)]
 impl Position {
     #[must_use]
     pub fn empty() -> Self {
@@ -399,6 +400,7 @@ impl Position {
         self.states.last_mut().unwrap()
     }
 
+    #[allow(clippy::unreadable_literal)]
     pub fn reset_to_startpos(&mut self) {
         self.states.clear();
         self.states.push(BoardState {
@@ -430,6 +432,8 @@ impl Position {
         self.update_checkers_and_pins();
     }
 
+    #[allow(clippy::manual_range_contains)]
+    #[allow(clippy::comparison_chain)]
     pub fn reset_from_fen_parts(&mut self, parts: &[&str]) -> Result<(), FenError> {
         if parts.len() < 6 {
             return Err(FenError::NotEnoughParts);
@@ -596,9 +600,7 @@ impl Position {
             return Err(FenError::InvalidHalfmove);
         }
 
-        let fullmove = if let Ok(fullmove) = parts[5].parse::<u32>() {
-            fullmove
-        } else {
+        let Ok(fullmove) = parts[5].parse::<u32>() else {
             return Err(FenError::InvalidFullmove);
         };
 
@@ -638,7 +640,7 @@ impl Position {
         }
 
         state.key ^= keys::castling(state.castling);
-        state.key ^= keys::en_passant(state.en_passant)
+        state.key ^= keys::en_passant(state.en_passant);
     }
 
     fn update_checkers_and_pins(&mut self) {
@@ -808,7 +810,7 @@ impl Position {
             new_state.remove_piece::<UPDATE_KEY>(capture_sq, captured);
 
             if captured.piece_type() == PieceType::ROOK {
-                new_state.castling.color_mut(nstm).unset(capture_sq)
+                new_state.castling.color_mut(nstm).unset(capture_sq);
             }
         }
 

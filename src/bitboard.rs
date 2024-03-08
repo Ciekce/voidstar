@@ -25,6 +25,7 @@ pub struct Bitboard {
     value: u64,
 }
 
+#[allow(unused, clippy::unreadable_literal)]
 impl Bitboard {
     pub const RANK_1: Self = Self::from_raw(0x00000000000000ff);
     pub const RANK_2: Self = Self::from_raw(0x000000000000ff00);
@@ -53,39 +54,39 @@ impl Bitboard {
     }
 
     #[must_use]
-    pub const fn raw(&self) -> u64 {
+    pub const fn raw(self) -> u64 {
         self.value
     }
 
     #[must_use]
-    pub const fn popcount(&self) -> u32 {
+    pub const fn popcount(self) -> u32 {
         self.value.count_ones()
     }
 
     #[must_use]
-    pub const fn is_empty(&self) -> bool {
+    pub const fn is_empty(self) -> bool {
         self.value == 0
     }
 
     #[must_use]
-    pub const fn contains_multiple(&self) -> bool {
+    pub const fn contains_multiple(self) -> bool {
         (self.value & self.value.wrapping_sub(1)) != 0
     }
 
     #[must_use]
-    pub const fn contains_one(&self) -> bool {
+    pub const fn contains_one(self) -> bool {
         !self.is_empty() && !self.contains_multiple()
     }
 
     #[must_use]
-    pub const fn flipped(&self) -> Self {
+    pub const fn flipped(self) -> Self {
         Self {
             value: self.value.swap_bytes(),
         }
     }
 
     #[must_use]
-    pub const fn get(&self, sq: Square) -> bool {
+    pub const fn get(self, sq: Square) -> bool {
         !self.and(sq.bit()).is_empty()
     }
 
@@ -109,74 +110,74 @@ impl Bitboard {
         }
     }
 
-    pub const fn with(&self, sq: Square) -> Self {
+    pub const fn with(self, sq: Square) -> Self {
         Self {
             value: self.value | sq.bit().raw(),
         }
     }
 
-    pub const fn without(&self, sq: Square) -> Self {
+    pub const fn without(self, sq: Square) -> Self {
         Self {
             value: self.value & !sq.bit().raw(),
         }
     }
 
     #[must_use]
-    pub const fn and(&self, rhs: Self) -> Self {
+    pub const fn and(self, rhs: Self) -> Self {
         Self {
             value: self.value & rhs.value,
         }
     }
 
     #[must_use]
-    pub const fn or(&self, rhs: Self) -> Self {
+    pub const fn or(self, rhs: Self) -> Self {
         Self {
             value: self.value | rhs.value,
         }
     }
 
     #[must_use]
-    pub const fn xor(&self, rhs: Self) -> Self {
+    pub const fn xor(self, rhs: Self) -> Self {
         Self {
             value: self.value ^ rhs.value,
         }
     }
 
     #[must_use]
-    pub const fn inverse(&self) -> Self {
+    pub const fn inverse(self) -> Self {
         Self { value: !self.value }
     }
 
     #[must_use]
-    pub const fn bit_shl(&self, rhs: u32) -> Self {
+    pub const fn bit_shl(self, rhs: u32) -> Self {
         Self {
             value: self.value << rhs,
         }
     }
 
     #[must_use]
-    pub const fn bit_shr(&self, rhs: u32) -> Self {
+    pub const fn bit_shr(self, rhs: u32) -> Self {
         Self {
             value: self.value >> rhs,
         }
     }
 
     #[must_use]
-    pub const fn shift_up(&self) -> Self {
+    pub const fn shift_up(self) -> Self {
         Self {
             value: self.value << 8,
         }
     }
 
     #[must_use]
-    pub const fn shift_down(&self) -> Self {
+    pub const fn shift_down(self) -> Self {
         Self {
             value: self.value >> 8,
         }
     }
 
     #[must_use]
-    pub const fn shift_left(&self) -> Self {
+    pub const fn shift_left(self) -> Self {
         const MASK: Bitboard = Bitboard::FILE_H.inverse();
         Self {
             value: self.value >> 1,
@@ -185,7 +186,7 @@ impl Bitboard {
     }
 
     #[must_use]
-    pub const fn shift_right(&self) -> Self {
+    pub const fn shift_right(self) -> Self {
         const MASK: Bitboard = Bitboard::FILE_A.inverse();
         Self {
             value: self.value << 1,
@@ -194,7 +195,7 @@ impl Bitboard {
     }
 
     #[must_use]
-    pub const fn shift_up_left(&self) -> Self {
+    pub const fn shift_up_left(self) -> Self {
         const MASK: Bitboard = Bitboard::FILE_H.inverse();
         Self {
             value: self.value << 7,
@@ -203,7 +204,7 @@ impl Bitboard {
     }
 
     #[must_use]
-    pub const fn shift_up_right(&self) -> Self {
+    pub const fn shift_up_right(self) -> Self {
         const MASK: Bitboard = Bitboard::FILE_A.inverse();
         Self {
             value: self.value << 9,
@@ -212,7 +213,7 @@ impl Bitboard {
     }
 
     #[must_use]
-    pub const fn shift_down_left(&self) -> Self {
+    pub const fn shift_down_left(self) -> Self {
         const MASK: Bitboard = Bitboard::FILE_H.inverse();
         Self {
             value: self.value >> 9,
@@ -221,7 +222,7 @@ impl Bitboard {
     }
 
     #[must_use]
-    pub const fn shift_down_right(&self) -> Self {
+    pub const fn shift_down_right(self) -> Self {
         const MASK: Bitboard = Bitboard::FILE_A.inverse();
         Self {
             value: self.value >> 7,
@@ -230,7 +231,7 @@ impl Bitboard {
     }
 
     #[must_use]
-    pub const fn shift_up_relative(&self, c: Color) -> Self {
+    pub const fn shift_up_relative(self, c: Color) -> Self {
         Self {
             value: if c.raw() == Color::BLACK.raw() {
                 self.value >> 8
@@ -241,7 +242,7 @@ impl Bitboard {
     }
 
     #[must_use]
-    pub const fn shift_down_relative(&self, c: Color) -> Self {
+    pub const fn shift_down_relative(self, c: Color) -> Self {
         Self {
             value: if c.raw() == Color::BLACK.raw() {
                 self.value << 8
@@ -252,7 +253,7 @@ impl Bitboard {
     }
 
     #[must_use]
-    pub const fn shift_up_left_relative(&self, c: Color) -> Self {
+    pub const fn shift_up_left_relative(self, c: Color) -> Self {
         const MASK: Bitboard = Bitboard::FILE_H.inverse();
         Self {
             value: if c.raw() == Color::BLACK.raw() {
@@ -265,7 +266,7 @@ impl Bitboard {
     }
 
     #[must_use]
-    pub const fn shift_up_right_relative(&self, c: Color) -> Self {
+    pub const fn shift_up_right_relative(self, c: Color) -> Self {
         const MASK: Bitboard = Bitboard::FILE_A.inverse();
         Self {
             value: if c.raw() == Color::BLACK.raw() {
@@ -278,12 +279,12 @@ impl Bitboard {
     }
 
     #[must_use]
-    pub const fn lowest_square(&self) -> Square {
+    pub const fn lowest_square(self) -> Square {
         Square::from_raw(self.value.trailing_zeros() as u8)
     }
 
     #[must_use]
-    pub const fn highest_square(&self) -> Square {
+    pub const fn highest_square(self) -> Square {
         Square::from_raw(self.value.leading_zeros() as u8 ^ 0x3f)
     }
 

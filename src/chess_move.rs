@@ -17,8 +17,6 @@
  */
 
 use crate::core::{PieceType, Square};
-use std::fmt::{Display, Formatter};
-use std::str::FromStr;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[repr(u8)]
@@ -34,6 +32,7 @@ pub struct ChessMove {
     value: u16,
 }
 
+#[allow(unused)]
 impl ChessMove {
     pub const NULL: Self = Self::from_raw(0);
 
@@ -91,37 +90,38 @@ impl ChessMove {
     }
 
     #[must_use]
-    pub fn is_null(&self) -> bool {
+    pub fn is_null(self) -> bool {
         self.value == 0
     }
 
     #[must_use]
-    pub fn src(&self) -> Square {
+    pub fn src(self) -> Square {
         Square::from_raw((self.value >> Self::SRC_SHIFT) as u8 & 0x3F)
     }
 
     #[must_use]
-    pub fn dst(&self) -> Square {
+    pub fn dst(self) -> Square {
         Square::from_raw((self.value >> Self::DST_SHIFT) as u8 & 0x3F)
     }
 
     #[must_use]
-    pub fn promo(&self) -> PieceType {
+    pub fn promo(self) -> PieceType {
         PieceType::from_raw(((self.value >> Self::PROMO_SHIFT) as u8 & 0x3) + 1)
     }
 
     #[must_use]
-    pub fn move_type(&self) -> MoveType {
+    pub fn move_type(self) -> MoveType {
         unsafe { std::mem::transmute((self.value & 0x3) as u8) }
     }
 
     // only meaningful for castling moves
     #[must_use]
-    pub fn is_short_castling(&self) -> bool {
+    pub fn is_short_castling(self) -> bool {
         self.src().file() < self.dst().file()
     }
 
-    pub fn to_string(&self, chess960: bool) -> String {
+    #[allow(clippy::wrong_self_convention)]
+    pub fn to_string(self, chess960: bool) -> String {
         if self.move_type() == MoveType::Promotion {
             return format!("{}{}{}", self.src(), self.dst(), self.promo().to_char());
         }

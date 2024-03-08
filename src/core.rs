@@ -23,6 +23,7 @@ use std::str::FromStr;
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct Square(u8);
 
+#[allow(unused)]
 impl Square {
     pub const A1: Self = Self(0);
     pub const B1: Self = Self(1);
@@ -107,48 +108,48 @@ impl Square {
     }
 
     #[must_use]
-    pub const fn raw(&self) -> u8 {
+    pub const fn raw(self) -> u8 {
         self.0
     }
 
     #[must_use]
-    pub const fn idx(&self) -> usize {
+    pub const fn idx(self) -> usize {
         self.0 as usize
     }
 
     #[must_use]
-    pub const fn bit(&self) -> Bitboard {
+    pub const fn bit(self) -> Bitboard {
         Bitboard::from_raw(1 << self.idx())
     }
 
     #[must_use]
-    pub const fn rank_bits(&self) -> Bitboard {
+    pub const fn rank_bits(self) -> Bitboard {
         Bitboard::RANK_1.bit_shl(self.rank() * 8)
     }
 
     #[must_use]
-    pub const fn file_bits(&self) -> Bitboard {
+    pub const fn file_bits(self) -> Bitboard {
         Bitboard::FILE_A.bit_shl(self.file())
     }
 
     #[must_use]
-    pub const fn rank(&self) -> u32 {
+    pub const fn rank(self) -> u32 {
         self.0 as u32 / 8
     }
 
     #[must_use]
-    pub const fn file(&self) -> u32 {
+    pub const fn file(self) -> u32 {
         self.0 as u32 % 8
     }
 
     #[must_use]
-    pub const fn flip_horizontal(&self) -> Self {
-        Self(self.0 ^ 0b000111)
+    pub const fn flip_horizontal(self) -> Self {
+        Self(self.0 ^ 0b000_111)
     }
 
     #[must_use]
-    pub const fn flip_vertical(&self) -> Self {
-        Self(self.0 ^ 0b111000)
+    pub const fn flip_vertical(self) -> Self {
+        Self(self.0 ^ 0b111_000)
     }
 }
 
@@ -214,6 +215,7 @@ pub struct Color {
     value: u8,
 }
 
+#[allow(unused)]
 impl Color {
     pub const BLACK: Self = Self::from_raw(0);
     pub const WHITE: Self = Self::from_raw(1);
@@ -248,18 +250,18 @@ impl Color {
     }
 
     #[must_use]
-    pub fn flip(&self) -> Self {
-        debug_assert!(*self != Self::NONE);
+    pub fn flip(self) -> Self {
+        debug_assert!(self != Self::NONE);
         Self::from_raw(self.value ^ 1)
     }
 
     #[must_use]
-    pub const fn raw(&self) -> u8 {
+    pub const fn raw(self) -> u8 {
         self.value
     }
 
     #[must_use]
-    pub const fn idx(&self) -> usize {
+    pub const fn idx(self) -> usize {
         self.value as usize
     }
 }
@@ -269,6 +271,7 @@ pub struct PieceType {
     value: u8,
 }
 
+#[allow(unused)]
 impl PieceType {
     pub const PAWN: Self = Self::from_raw(0);
     pub const KNIGHT: Self = Self::from_raw(1);
@@ -315,7 +318,7 @@ impl PieceType {
     }
 
     #[must_use]
-    pub const fn colored(&self, c: Color) -> Piece {
+    pub const fn colored(self, c: Color) -> Piece {
         debug_assert!(self.raw() != PieceType::NONE.raw());
         debug_assert!(c.raw() != Color::NONE.raw());
 
@@ -323,12 +326,12 @@ impl PieceType {
     }
 
     #[must_use]
-    pub const fn raw(&self) -> u8 {
+    pub const fn raw(self) -> u8 {
         self.value
     }
 
     #[must_use]
-    pub fn idx(&self) -> usize {
+    pub fn idx(self) -> usize {
         self.value as usize
     }
 
@@ -412,7 +415,7 @@ impl Piece {
     }
 
     #[must_use]
-    pub const fn color(&self) -> Color {
+    pub const fn color(self) -> Color {
         Color::from_raw(self.value & 1)
     }
 
@@ -437,17 +440,17 @@ impl Piece {
     }
 
     #[must_use]
-    pub const fn piece_type(&self) -> PieceType {
+    pub const fn piece_type(self) -> PieceType {
         PieceType::from_raw(self.value >> 1)
     }
 
     #[must_use]
-    pub const fn raw(&self) -> u8 {
+    pub const fn raw(self) -> u8 {
         self.value
     }
 
     #[must_use]
-    pub fn idx(&self) -> usize {
+    pub fn idx(self) -> usize {
         self.value as usize
     }
 

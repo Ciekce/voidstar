@@ -20,7 +20,7 @@ use crate::attacks;
 use crate::bitboard::Bitboard;
 use crate::chess_move::ChessMove;
 use crate::core::{Color, PieceType, Square};
-use crate::position::{Position, RookPair};
+use crate::position::Position;
 use crate::rays::{ray_between, ray_intersecting};
 use arrayvec::ArrayVec;
 
@@ -28,20 +28,20 @@ pub type MoveList = ArrayVec<ChessMove, 256>;
 
 fn serialize_normal(moves: &mut MoveList, src: Square, dsts: Bitboard) {
     for dst in dsts {
-        moves.push(ChessMove::normal(src, dst))
+        moves.push(ChessMove::normal(src, dst));
     }
 }
 
 fn serialize_normal_pawn(moves: &mut MoveList, offset: i32, dsts: Bitboard) {
     for dst in dsts {
-        let src = Square::from_raw((dst.raw() as i32 - offset) as u8);
+        let src = Square::from_raw((i32::from(dst.raw()) - offset) as u8);
         moves.push(ChessMove::normal(src, dst));
     }
 }
 
 fn serialize_promo_pawn(moves: &mut MoveList, offset: i32, dsts: Bitboard) {
     for dst in dsts {
-        let src = Square::from_raw((dst.raw() as i32 - offset) as u8);
+        let src = Square::from_raw((i32::from(dst.raw()) - offset) as u8);
         moves.push(ChessMove::promotion(src, dst, PieceType::KNIGHT));
         moves.push(ChessMove::promotion(src, dst, PieceType::BISHOP));
         moves.push(ChessMove::promotion(src, dst, PieceType::ROOK));
@@ -228,7 +228,7 @@ fn generate_king_moves(moves: &mut MoveList, pos: &Position) {
         for checker in pos.checkers() {
             let piece = pos.piece_type_at(checker);
             if piece == PieceType::BISHOP || piece == PieceType::ROOK || piece == PieceType::QUEEN {
-                potential_moves &= !ray_intersecting(king, checker).without(checker)
+                potential_moves &= !ray_intersecting(king, checker).without(checker);
             }
         }
 

@@ -16,6 +16,8 @@
  * along with Voidstar. If not, see <https://www.gnu.org/licenses/>.
  */
 
+#![allow(unused)]
+
 use crate::array_init;
 use crate::bitboard::Bitboard;
 use crate::core::{Color, Square};
@@ -85,7 +87,7 @@ const KING_ATTACKS: [Bitboard; 64] = array_init!(|sq_idx, 64| {
     attacks
 });
 
-const DIAG: u64 = 0x8040201008040201;
+const DIAG: u64 = 0x8040_2010_0804_0201;
 
 const fn diag_mask(i: u32) -> u64 {
     if i > 7 {

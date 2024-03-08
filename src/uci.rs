@@ -16,10 +16,9 @@
  * along with Voidstar. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::chess_move::{ChessMove, MoveType};
 use crate::movegen::{generate_moves, MoveList};
 use crate::perft::{perft, split_perft};
-use crate::position::{MoveStrError, Position};
+use crate::position::Position;
 
 const NAME: &str = "Voidstar";
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -70,6 +69,7 @@ impl UciHandler {
         }
     }
 
+    #[allow(clippy::unused_self)]
     fn handle_uci(&self) {
         println!("id name {} {}", NAME, VERSION);
         println!("id author {}", AUTHORS.replace(':', ", "));
@@ -96,6 +96,7 @@ impl UciHandler {
         let name = args[1usize..idx].join(" ").to_ascii_lowercase();
         let value = args[(idx + 1)..].join(" ");
 
+        #[allow(clippy::single_match)]
         match name.as_str() {
             "uci_chess960" => {
                 if let Ok(new_chess960) = value.to_ascii_lowercase().parse::<bool>() {
@@ -107,13 +108,13 @@ impl UciHandler {
                     }
                 } else {
                     eprintln!("Invalid bool");
-                    return;
                 }
             }
             _ => {}
         }
     }
 
+    #[allow(clippy::unused_self)]
     fn handle_isready(&self) {
         println!("readyok");
     }
