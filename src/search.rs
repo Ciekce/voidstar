@@ -126,7 +126,7 @@ impl Searcher {
         assert_eq!(node.child_count, 0);
         assert!(!node.result.is_terminal());
 
-        if self.pos.is_drawn() {
+        if self.pos.is_drawn(node_idx == 0) {
             node.result = GameResult::Draw;
             return;
         }
@@ -166,7 +166,7 @@ impl Searcher {
             let mv = moves[rng.next_u32_bounded(moves.len() as u32) as usize];
             pos.apply_move::<false, true>(mv);
 
-            if pos.is_drawn() {
+            if pos.is_drawn(false) {
                 0.5
             } else {
                 1.0 - playout(pos, rng)

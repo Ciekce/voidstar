@@ -1071,12 +1071,14 @@ impl Position {
     }
 
     #[must_use]
-    pub fn is_drawn(&self) -> bool {
+    pub fn is_drawn(&self, root: bool) -> bool {
         let state = self.curr_state();
 
         if state.halfmove >= 100 {
             return true;
         }
+
+        let mut repetitions_left = if root { 2 } else { 1 };
 
         for key in self
             .keys
@@ -1087,7 +1089,10 @@ impl Position {
             .step_by(2)
         {
             if *key == state.key {
-                return true;
+                repetitions_left -= 1;
+                if repetitions_left == 0 {
+                    return true;
+                }
             }
         }
 
