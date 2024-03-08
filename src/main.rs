@@ -40,6 +40,7 @@ mod perft;
 mod position;
 mod rays;
 mod rng;
+mod search;
 mod uci;
 
 fn main() {

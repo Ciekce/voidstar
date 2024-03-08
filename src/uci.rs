@@ -19,6 +19,7 @@
 use crate::movegen::{generate_moves, MoveList};
 use crate::perft::{perft, split_perft};
 use crate::position::Position;
+use crate::search::Searcher;
 
 const NAME: &str = "Voidstar";
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -26,6 +27,7 @@ const AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
 
 struct UciHandler {
     pos: Position,
+    searcher: Searcher,
     chess960: bool,
 }
 
@@ -34,6 +36,7 @@ impl UciHandler {
     fn new() -> Self {
         Self {
             pos: Position::startpos(),
+            searcher: Searcher::new(),
             chess960: false,
         }
     }
@@ -53,9 +56,11 @@ impl UciHandler {
 
             match cmd[0] {
                 "uci" => self.handle_uci(),
+                "ucinewgame" => self.handle_ucinewgame(),
                 "setoption" => self.handle_setoption(&cmd[1..]),
                 "isready" => self.handle_isready(),
                 "position" => self.handle_position(&cmd[1..]),
+                "go" => self.handle_go(&cmd[1..]),
                 "move" => self.handle_move(&cmd[1..]),
                 "d" => self.handle_d(),
                 "moves" => self.handle_moves(),
@@ -75,6 +80,10 @@ impl UciHandler {
         println!("id author {}", AUTHORS.replace(':', ", "));
         println!("option name UCI_Chess960 type check default false");
         println!("uciok");
+    }
+
+    fn handle_ucinewgame(&mut self) {
+        self.searcher.new_game();
     }
 
     fn handle_setoption(&mut self, args: &[&str]) {
@@ -155,6 +164,41 @@ impl UciHandler {
                 }
             }
         }
+    }
+
+    fn handle_go(&mut self, args: &[&str]) {
+        let mut nodes: Option<usize> = None;
+
+        let mut i = 0usize;
+        while i < args.len() {
+            match args[i] {
+                "nodes" => {
+                    i += 1;
+                    if i >= args.len() {
+                        eprintln!("Missing node count");
+                        return;
+                    }
+
+                    if nodes.is_some() {
+                        eprintln!("Multiple node counts");
+                        return;
+                    }
+
+                    if let Ok(node_limit) = args[i].parse::<usize>() {
+                        nodes = Some(node_limit);
+                    } else {
+                        eprintln!("Invalid node limit '{}'", args[i]);
+                        return;
+                    }
+                }
+                _ => eprintln!("Only `go nodes` supported"),
+            }
+
+            i += 1;
+        }
+
+        self.searcher
+            .search(&self.pos, nodes.unwrap_or(25000), self.chess960);
     }
 
     fn handle_move(&mut self, args: &[&str]) {

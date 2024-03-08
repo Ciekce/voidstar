@@ -69,6 +69,41 @@ impl Jsf64Rng {
     pub fn next_u64(&mut self) -> u64 {
         next_jsf64!(self)
     }
+
+    #[must_use]
+    pub fn next_u32(&mut self) -> u32 {
+        (self.next_u64() >> 32) as u32
+    }
+
+    #[must_use]
+    pub fn next_u32_bounded(&mut self, bound: u32) -> u32 {
+        if bound == 0 {
+            return 0;
+        }
+
+        let mut x = self.next_u32();
+        let mut m = u64::from(x) * u64::from(bound);
+        let mut l = m as u32;
+
+        if l < bound {
+            let mut t = bound.wrapping_neg();
+
+            if t >= bound {
+                t -= bound;
+                if t >= bound {
+                    t %= bound;
+                }
+            }
+
+            while l < t {
+                x = self.next_u32();
+                m = u64::from(x) * u64::from(bound);
+                l = m as u32;
+            }
+        }
+
+        (m >> 32) as u32
+    }
 }
 
 pub const fn fill_u64_array<const SIZE: usize>(seed: u64) -> [u64; SIZE] {
