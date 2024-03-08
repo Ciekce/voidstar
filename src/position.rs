@@ -301,6 +301,7 @@ impl Default for BoardState {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Position {
     black_to_move: bool,
     fullmove: u32,
@@ -986,6 +987,11 @@ impl Position {
     }
 
     #[must_use]
+    pub fn is_in_check(&self) -> bool {
+        !self.curr_state().checkers.is_empty()
+    }
+
+    #[must_use]
     pub fn is_attacked_occ(&self, sq: Square, occupancy: Bitboard) -> bool {
         let stm = self.side_to_move();
         let nstm = stm.flip();
@@ -1062,6 +1068,30 @@ impl Position {
         attackers |= rooks & attacks::rook_attacks(sq, occ);
 
         attackers
+    }
+
+    #[must_use]
+    pub fn is_drawn(&self) -> bool {
+        let state = self.curr_state();
+
+        if state.halfmove >= 100 {
+            return true;
+        }
+
+        for key in self
+            .keys
+            .iter()
+            .rev()
+            .take(state.halfmove as usize + 1)
+            .skip(3)
+            .step_by(2)
+        {
+            if *key == state.key {
+                return true;
+            }
+        }
+
+        false
     }
 
     #[must_use]

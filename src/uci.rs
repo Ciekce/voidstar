@@ -16,9 +16,12 @@
  * along with Voidstar. If not, see <https://www.gnu.org/licenses/>.
  */
 
+use crate::core::Color;
+use crate::limit::SearchLimiter;
 use crate::movegen::{generate_moves, MoveList};
 use crate::perft::{perft, split_perft};
 use crate::position::Position;
+use crate::search::Searcher;
 
 const NAME: &str = "Voidstar";
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -26,6 +29,7 @@ const AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
 
 struct UciHandler {
     pos: Position,
+    searcher: Searcher,
     chess960: bool,
 }
 
@@ -34,6 +38,7 @@ impl UciHandler {
     fn new() -> Self {
         Self {
             pos: Position::startpos(),
+            searcher: Searcher::new(),
             chess960: false,
         }
     }
@@ -53,9 +58,11 @@ impl UciHandler {
 
             match cmd[0] {
                 "uci" => self.handle_uci(),
+                "ucinewgame" => self.handle_ucinewgame(),
                 "setoption" => self.handle_setoption(&cmd[1..]),
                 "isready" => self.handle_isready(),
                 "position" => self.handle_position(&cmd[1..]),
+                "go" => self.handle_go(&cmd[1..]),
                 "move" => self.handle_move(&cmd[1..]),
                 "d" => self.handle_d(),
                 "moves" => self.handle_moves(),
@@ -75,6 +82,10 @@ impl UciHandler {
         println!("id author {}", AUTHORS.replace(':', ", "));
         println!("option name UCI_Chess960 type check default false");
         println!("uciok");
+    }
+
+    fn handle_ucinewgame(&mut self) {
+        self.searcher.new_game();
     }
 
     fn handle_setoption(&mut self, args: &[&str]) {
@@ -155,6 +166,136 @@ impl UciHandler {
                 }
             }
         }
+    }
+
+    fn handle_go(&mut self, args: &[&str]) {
+        let mut limiter: Option<SearchLimiter> = None;
+
+        let mut tournament_time = false;
+
+        let mut black_time = 0u64;
+        let mut white_time = 0u64;
+        let mut black_inc = 0u64;
+        let mut white_inc = 0u64;
+
+        let mut moves_to_go = 0u64;
+
+        let mut i = 0usize;
+        while i < args.len() {
+            match args[i] {
+                "infinite" => {
+                    if tournament_time || limiter.is_some() {
+                        eprintln!("Multiple non-depth search limits not supported");
+                        return;
+                    }
+
+                    println!("info string this search will never terminate");
+
+                    limiter = Some(SearchLimiter::infinite());
+                }
+                "depth" => {
+                    i += 1;
+                    if i >= args.len() {
+                        eprintln!("Missing depth");
+                        return;
+                    }
+
+                    println!("info string fixed-depth searches not supported");
+
+                    return;
+                }
+                "nodes" => {
+                    if tournament_time || limiter.is_some() {
+                        eprintln!("Multiple non-depth search limits not supported");
+                        return;
+                    }
+
+                    i += 1;
+                    if i >= args.len() {
+                        eprintln!("Missing node count");
+                        return;
+                    }
+
+                    if let Ok(node_limit) = args[i].parse::<usize>() {
+                        limiter = Some(SearchLimiter::fixed_nodes(node_limit));
+                    } else {
+                        eprintln!("Invalid node limit '{}'", args[i]);
+                        return;
+                    }
+                }
+                "movetime" => {
+                    if tournament_time || limiter.is_some() {
+                        eprintln!("Multiple non-depth search limits not supported");
+                        return;
+                    }
+
+                    i += 1;
+                    if i >= args.len() {
+                        eprintln!("Missing move time");
+                        return;
+                    }
+
+                    if let Ok(time_limit) = args[i].parse::<u64>() {
+                        limiter = Some(SearchLimiter::move_time(time_limit));
+                    } else {
+                        eprintln!("Invalid move time '{}'", args[i]);
+                        return;
+                    }
+                }
+                "wtime" | "btime" | "winc" | "binc" | "movestogo" => {
+                    if limiter.is_some() {
+                        eprintln!("Multiple non-depth search limits not supported");
+                        return;
+                    }
+
+                    tournament_time = true;
+
+                    let token = args[i];
+
+                    i += 1;
+                    if i >= args.len() {
+                        eprintln!("Missing {}", token);
+                        return;
+                    }
+
+                    let Ok(value) = args[i].parse::<u64>() else {
+                        eprintln!("Invalid {} '{}'", token, args[i]);
+                        return;
+                    };
+
+                    match token {
+                        "btime" => black_time = value,
+                        "wtime" => white_time = value,
+                        "binc" => black_inc = value,
+                        "winc" => white_inc = value,
+                        "movestogo" => moves_to_go = value,
+                        _ => unreachable!(),
+                    }
+                }
+                unknown => {
+                    eprintln!("Unknown search limit '{}'", unknown);
+                    return;
+                }
+            }
+
+            i += 1;
+        }
+
+        if tournament_time {
+            assert!(limiter.is_none());
+
+            let (our_time, our_inc) = match self.pos.side_to_move() {
+                Color::BLACK => (black_time, black_inc),
+                Color::WHITE => (white_time, white_inc),
+                _ => unreachable!(),
+            };
+
+            limiter = Some(SearchLimiter::tournament(our_time, our_inc, moves_to_go));
+        } else if limiter.is_none() {
+            limiter = Some(SearchLimiter::infinite());
+        }
+
+        self.searcher .search(&self.pos, limiter.unwrap().clone(), self.chess960);
     }
 
     fn handle_move(&mut self, args: &[&str]) {
