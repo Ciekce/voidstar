@@ -21,6 +21,7 @@ use crate::movegen::{generate_moves, MoveList};
 use crate::position::Position;
 use crate::rng::Jsf64Rng;
 use std::time::Instant;
+use crate::limit::SearchLimiter;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[repr(u8)]
@@ -253,13 +254,13 @@ impl Searcher {
         1.0 - best_score_root
     }
 
-    pub fn search(&mut self, pos: &Position, max_nodes: usize, chess960: bool) {
+    pub fn search(&mut self, pos: &Position, mut limiter: SearchLimiter, chess960: bool) {
         self.tree.push(Node::new(0, ChessMove::NULL));
 
         let start = Instant::now();
         let mut nodes = 0usize;
 
-        while nodes < max_nodes {
+        while !limiter.should_stop(nodes) {
             self.pos = pos.clone();
 
             let leaf = self.select();

@@ -34,6 +34,7 @@ mod bitboard;
 mod chess_move;
 mod core;
 mod keys;
+mod limit;
 mod macros;
 mod movegen;
 mod perft;
