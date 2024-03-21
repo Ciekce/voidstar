@@ -206,16 +206,51 @@ impl Searcher {
                 break;
             }
 
-            node.total_score += u;
             u = 1.0 - u;
+            node.total_score += u;
 
             node_idx = node.parent;
         }
     }
 
+    fn select_best_move(&self, chess960: bool) -> (usize, f32) {
+        let root = &self.tree[0];
+
+        let start = root.first_child as usize;
+        let end = start + root.child_count as usize;
+
+        assert!(start < end);
+
+        let mut best = None;
+        let mut best_visits = 0u32;
+        let mut best_score = f32::NEG_INFINITY;
+
+        for node_idx in start..end {
+            let node = &self.tree[node_idx];
+            let score = node.total_score / (node.visits as f32);
+
+            println!(
+                "info string {}: V: {}, S: {}",
+                node.mv.to_string(chess960),
+                node.visits,
+                score,
+            );
+
+            if node.visits > best_visits {
+                best = Some(node_idx);
+                best_visits = node.visits;
+                best_score = score;
+            }
+        }
+
+        (best.unwrap(), best_score)
+    }
+
     fn build_pv(&self, pv: &mut MoveList, chess960: bool) -> f32 {
-        let mut node_idx = 0;
-        let mut best_score_root: f32 = 0.0;
+        let (best_child_root, best_score_root) = self.select_best_move(chess960);
+        pv.push(self.tree[best_child_root].mv);
+
+        let mut node_idx = best_child_root as u32;
 
         loop {
             let node = &self.tree[node_idx as usize];
@@ -227,7 +262,7 @@ impl Searcher {
             let mut found_child = false;
 
             let mut best_child = 0;
-            let mut best_child_score = f32::INFINITY;
+            let mut best_child_score = f32::NEG_INFINITY;
 
             for child in node.first_child..(node.first_child + u32::from(node.child_count)) {
                 let child_node = &self.tree[child as usize];
@@ -240,16 +275,7 @@ impl Searcher {
 
                 let score = child_node.total_score / (child_node.visits as f32);
 
-                if node_idx == 0 {
-                    println!(
-                        "info string {}: V: {}, S: {}",
-                        child_node.mv.to_string(chess960),
-                        child_node.visits,
-                        score,
-                    );
-                }
-
-                if score < best_child_score {
+                if score > best_child_score {
                     best_child = child;
                     best_child_score = score;
                 }
@@ -259,15 +285,11 @@ impl Searcher {
                 break;
             }
 
-            if node_idx == 0 {
-                best_score_root = best_child_score;
-            }
-
             pv.push(self.tree[best_child as usize].mv);
             node_idx = best_child;
         }
 
-        1.0 - best_score_root
+        best_score_root
     }
 
     pub fn search(&mut self, pos: &Position, mut limiter: SearchLimiter, chess960: bool) {
