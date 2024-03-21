@@ -37,6 +37,7 @@ mod keys;
 mod limit;
 mod macros;
 mod movegen;
+mod nnue;
 mod perft;
 mod position;
 mod rays;

@@ -19,6 +19,7 @@
 use crate::core::Color;
 use crate::limit::SearchLimiter;
 use crate::movegen::{generate_moves, MoveList};
+use crate::nnue;
 use crate::perft::{perft, split_perft};
 use crate::position::Position;
 use crate::search::Searcher;
@@ -315,6 +316,7 @@ impl UciHandler {
         println!();
         println!("Fen: {}", self.pos.to_fen(self.chess960));
         println!("Key: {:16x}", self.pos.key());
+        println!("Static eval: {}", nnue::eval(&self.pos));
 
         print!("Checkers:");
         for checker in self.pos.checkers() {

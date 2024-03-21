@@ -17,9 +17,9 @@
  */
 
 use crate::chess_move::ChessMove;
-use crate::core::{Color, PieceType};
 use crate::limit::SearchLimiter;
 use crate::movegen::{generate_moves, MoveList};
+use crate::nnue;
 use crate::position::Position;
 use crate::rng::Jsf64Rng;
 use std::time::Instant;
@@ -161,18 +161,7 @@ impl Searcher {
     fn simulate(&self, node_idx: u32) -> f32 {
         let node = &self.tree[node_idx as usize];
         node.result.u().unwrap_or_else(|| {
-            fn material(pos: &Position, c: Color) -> i32 {
-                (pos.colored_pieces(PieceType::PAWN.colored(c)).popcount() * 100
-                    + pos.colored_pieces(PieceType::KNIGHT.colored(c)).popcount() * 300
-                    + pos.colored_pieces(PieceType::BISHOP.colored(c)).popcount() * 300
-                    + pos.colored_pieces(PieceType::ROOK.colored(c)).popcount() * 500
-                    + pos.colored_pieces(PieceType::QUEEN.colored(c)).popcount() * 900)
-                    as i32
-            }
-
-            let stm = self.pos.side_to_move();
-            let eval = material(&self.pos, stm) - material(&self.pos, stm.flip());
-
+            let eval = nnue::eval(&self.pos);
             1.0 / (1.0 + (-eval as f32 / 400.0).exp())
         })
     }
