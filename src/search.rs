@@ -85,6 +85,10 @@ impl Node {
             result: GameResult::Ongoing,
         }
     }
+
+    fn q(&self) -> f32 {
+        self.total_score / self.visits as f32
+    }
 }
 
 pub struct Searcher {
@@ -142,12 +146,7 @@ impl Searcher {
             let mut best_child_uct = f32::NEG_INFINITY;
 
             for (child_idx, child) in self.tree[first..(first + count)].iter().enumerate() {
-                let q = if child.visits == 0 {
-                    fpu
-                } else {
-                    child.total_score / child.visits as f32
-                };
-
+                let q = if child.visits == 0 { fpu } else { child.q() };
                 let uct = q + e * p / (1 + child.visits) as f32;
 
                 if uct > best_child_uct {
@@ -247,7 +246,7 @@ impl Searcher {
 
         for node_idx in start..end {
             let node = &self.tree[node_idx];
-            let score = node.total_score / (node.visits as f32);
+            let score = node.q();
 
             println!(
                 "info string {}: V: {}, S: {}",
@@ -293,7 +292,7 @@ impl Searcher {
 
                 found_child = true;
 
-                let score = child_node.total_score / (child_node.visits as f32);
+                let score = child_node.q();
 
                 if score > best_child_score {
                     best_child = child;
