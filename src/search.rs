@@ -21,7 +21,6 @@ use crate::core::{Color, PieceType};
 use crate::limit::SearchLimiter;
 use crate::movegen::{generate_moves, MoveList};
 use crate::position::Position;
-use crate::rng::Jsf64Rng;
 use std::time::Instant;
 
 #[derive(Debug, Copy, Clone)]
@@ -90,7 +89,6 @@ impl Node {
 
 pub struct Searcher {
     tree: Vec<Node>,
-    rng: Jsf64Rng,
     pos: Position,
     depth: u32,
 }
@@ -99,14 +97,14 @@ impl Searcher {
     pub fn new() -> Self {
         Self {
             tree: Vec::new(),
-            rng: Jsf64Rng::new(69420),
             pos: Position::empty(),
             depth: 0,
         }
     }
 
+    #[allow(clippy::unused_self)]
     pub fn new_game(&mut self) {
-        self.rng = Jsf64Rng::new(69420);
+        // no-op
     }
 
     fn select(&mut self, cpuct: f32, fpu: f32) -> u32 {
