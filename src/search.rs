@@ -33,7 +33,7 @@ impl Default for Params {
     fn default() -> Self {
         Self {
             cpuct: std::f32::consts::SQRT_2,
-            fpu: f32::INFINITY,
+            fpu: 0.5,
         }
     }
 }
@@ -135,19 +135,21 @@ impl Searcher {
             let first = node.first_child as usize;
             let count = node.child_count as usize;
 
-            let lv = (node.visits as f32).ln();
+            let e = cpuct * (node.visits as f32).sqrt();
+            #[allow(clippy::cast_lossless)]
+            let p = 1.0 / node.child_count as f32;
 
             let mut best_child = None;
             let mut best_child_uct = f32::NEG_INFINITY;
 
             for (child_idx, child) in self.tree[first..(first + count)].iter().enumerate() {
-                let uct = if child.visits == 0 {
+                let q = if child.visits == 0 {
                     fpu
                 } else {
-                    let visits = child.visits as f32;
-                    let score = child.total_score / visits;
-                    score + cpuct * (lv / visits).sqrt()
+                    child.total_score / child.visits as f32
                 };
+
+                let uct = q + e * p / (1 + child.visits) as f32;
 
                 if uct > best_child_uct {
                     best_child = Some(child_idx);
