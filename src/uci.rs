@@ -21,6 +21,7 @@ use crate::limit::SearchLimiter;
 use crate::movegen::{generate_moves, MoveList};
 use crate::perft::{perft, split_perft};
 use crate::position::Position;
+use crate::search;
 use crate::search::Searcher;
 
 const NAME: &str = "Voidstar";
@@ -31,6 +32,7 @@ struct UciHandler {
     pos: Position,
     searcher: Searcher,
     chess960: bool,
+    search_params: search::Params,
 }
 
 impl UciHandler {
@@ -40,6 +42,7 @@ impl UciHandler {
             pos: Position::startpos(),
             searcher: Searcher::new(),
             chess960: false,
+            search_params: search::Params::default(),
         }
     }
 
@@ -78,9 +81,19 @@ impl UciHandler {
 
     #[allow(clippy::unused_self)]
     fn handle_uci(&self) {
+        let default_params = search::Params::default();
+
         println!("id name {} {}", NAME, VERSION);
         println!("id author {}", AUTHORS.replace(':', ", "));
         println!("option name UCI_Chess960 type check default false");
+        println!(
+            "option name Cpuct type string default \"{}\"",
+            default_params.cpuct
+        );
+        println!(
+            "option name FPU type string default \"{}\"",
+            default_params.fpu
+        );
         println!("uciok");
     }
 
@@ -119,6 +132,22 @@ impl UciHandler {
                     }
                 } else {
                     eprintln!("Invalid bool");
+                }
+            }
+            "cpuct" => {
+                if let Ok(new_cpuct) = value.parse::<f32>() {
+                    self.search_params.cpuct = new_cpuct;
+                    println!("info string set Cpuct to {}", self.search_params.cpuct);
+                } else {
+                    eprintln!("Invalid f32");
+                }
+            }
+            "fpu" => {
+                if let Ok(new_fpu) = value.parse::<f32>() {
+                    self.search_params.fpu = new_fpu;
+                    println!("info string set FPU to {}", self.search_params.fpu);
+                } else {
+                    eprintln!("Invalid f32");
                 }
             }
             _ => {}
@@ -292,11 +321,16 @@ impl UciHandler {
 
             limiter = Some(SearchLimiter::tournament(our_time, our_inc, moves_to_go));
         } else if limiter.is_none() {
+            println!("info string this search will never terminate");
             limiter = Some(SearchLimiter::infinite());
         }
 
-        self.searcher
-            .search(&self.pos, limiter.unwrap().clone(), self.chess960);
+        self.searcher.search(
+            &self.pos,
+            &self.search_params,
+            limiter.unwrap().clone(),
+            self.chess960,
+        );
     }
 
     fn handle_move(&mut self, args: &[&str]) {

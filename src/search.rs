@@ -24,6 +24,21 @@ use crate::position::Position;
 use crate::rng::Jsf64Rng;
 use std::time::Instant;
 
+#[derive(Debug, Copy, Clone)]
+pub struct Params {
+    pub cpuct: f32,
+    pub fpu: f32,
+}
+
+impl Default for Params {
+    fn default() -> Self {
+        Self {
+            cpuct: std::f32::consts::SQRT_2,
+            fpu: f32::INFINITY,
+        }
+    }
+}
+
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[repr(u8)]
 enum GameResult {
@@ -94,10 +109,7 @@ impl Searcher {
         self.rng = Jsf64Rng::new(69420);
     }
 
-    fn select(&mut self) -> u32 {
-        const CPUCT: f32 = std::f32::consts::SQRT_2;
-        const FPU: f32 = f32::INFINITY;
-
+    fn select(&mut self, cpuct: f32, fpu: f32) -> u32 {
         let mut curr = 0u32;
 
         loop {
@@ -132,11 +144,11 @@ impl Searcher {
 
             for (child_idx, child) in self.tree[first..(first + count)].iter().enumerate() {
                 let uct = if child.visits == 0 {
-                    FPU
+                    fpu
                 } else {
                     let visits = child.visits as f32;
                     let score = child.total_score / visits;
-                    score + CPUCT * (lv / visits).sqrt()
+                    score + cpuct * (lv / visits).sqrt()
                 };
 
                 if uct > best_child_uct {
@@ -303,7 +315,13 @@ impl Searcher {
         best_score_root
     }
 
-    pub fn search(&mut self, pos: &Position, mut limiter: SearchLimiter, chess960: bool) {
+    pub fn search(
+        &mut self,
+        pos: &Position,
+        params: &Params,
+        mut limiter: SearchLimiter,
+        chess960: bool,
+    ) {
         self.tree.push(Node::new(0, ChessMove::NULL));
 
         let start = Instant::now();
@@ -317,7 +335,7 @@ impl Searcher {
             self.pos = pos.clone();
             self.depth = 1;
 
-            let leaf = self.select();
+            let leaf = self.select(params.cpuct, params.fpu);
             let node = &self.tree[leaf as usize];
 
             if !node.result.is_terminal() {
