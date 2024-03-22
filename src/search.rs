@@ -136,8 +136,7 @@ impl Searcher {
             let count = node.child_count as usize;
 
             let e = cpuct * (node.visits as f32).sqrt();
-            #[allow(clippy::cast_lossless)]
-            let p = 1.0 / node.child_count as f32;
+            let p = 1.0 / f32::from(node.child_count);
 
             let mut best_child = None;
             let mut best_child_uct = f32::NEG_INFINITY;
@@ -156,8 +155,6 @@ impl Searcher {
                     best_child_uct = uct;
                 }
             }
-
-            assert_ne!(best_child, None);
 
             curr = (first + best_child.unwrap()) as u32;
         }
@@ -315,6 +312,7 @@ impl Searcher {
         best_score_root
     }
 
+    #[allow(clippy::trivially_copy_pass_by_ref)]
     pub fn search(
         &mut self,
         pos: &Position,
