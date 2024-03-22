@@ -16,6 +16,7 @@
  * along with Voidstar. If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::ops::Range;
 use crate::chess_move::ChessMove;
 use crate::core::{Color, PieceType};
 use crate::limit::SearchLimiter;
@@ -89,6 +90,12 @@ impl Node {
     fn q(&self) -> f32 {
         self.total_score / self.visits as f32
     }
+
+    fn children(&self) -> Range<usize> {
+        let start = self.first_child as usize;
+        let end = start + self.child_count as usize;
+        start..end
+    }
 }
 
 pub struct Searcher {
@@ -111,11 +118,11 @@ impl Searcher {
         // no-op
     }
 
-    fn select(&mut self, cpuct: f32, fpu: f32) -> u32 {
-        let mut curr = 0u32;
+    fn select(&mut self, cpuct: f32, fpu: f32) -> usize {
+        let mut curr = 0usize;
 
         loop {
-            let node = &self.tree[curr as usize];
+            let node = &self.tree[curr];
 
             if curr != 0 {
                 #[cfg(debug_assertions)]
@@ -136,16 +143,15 @@ impl Searcher {
 
             assert_ne!(node.visits, 0);
 
-            let first = node.first_child as usize;
-            let count = node.child_count as usize;
-
             let e = cpuct * (node.visits as f32).sqrt();
             let p = 1.0 / f32::from(node.child_count);
 
             let mut best_child = None;
             let mut best_child_uct = f32::NEG_INFINITY;
 
-            for (child_idx, child) in self.tree[first..(first + count)].iter().enumerate() {
+            for child_idx in node.children() {
+                let child = &self.tree[child_idx];
+
                 let q = if child.visits == 0 { fpu } else { child.q() };
                 let uct = q + e * p / (1 + child.visits) as f32;
 
@@ -155,15 +161,15 @@ impl Searcher {
                 }
             }
 
-            curr = (first + best_child.unwrap()) as u32;
+            curr = best_child.unwrap();
         }
 
         curr
     }
 
-    fn expand(&mut self, node_idx: u32) {
+    fn expand(&mut self, node_idx: usize) {
         let next = self.tree.len() as u32;
-        let node = &mut self.tree[node_idx as usize];
+        let node = &mut self.tree[node_idx];
 
         assert_eq!(node.child_count, 0);
         assert!(!node.result.is_terminal());
@@ -185,19 +191,19 @@ impl Searcher {
             return;
         }
 
-        let child_count = moves.len() as u32;
+        let child_count = moves.len();
 
         node.first_child = next;
         node.child_count = child_count as u8;
 
         for mv in moves {
-            let node = Node::new(node_idx, mv);
+            let node = Node::new(node_idx as u32, mv);
             self.tree.push(node);
         }
     }
 
-    fn simulate(&self, node_idx: u32) -> f32 {
-        let node = &self.tree[node_idx as usize];
+    fn simulate(&self, node_idx: usize) -> f32 {
+        let node = &self.tree[node_idx];
         node.result.u().unwrap_or_else(|| {
             fn material(pos: &Position, c: Color) -> i32 {
                 (pos.colored_pieces(PieceType::PAWN.colored(c)).popcount() * 100
@@ -215,9 +221,9 @@ impl Searcher {
         })
     }
 
-    fn backprop(&mut self, mut node_idx: u32, mut u: f32) {
+    fn backprop(&mut self, mut node_idx: usize, mut u: f32) {
         loop {
-            let node = &mut self.tree[node_idx as usize];
+            let node = &mut self.tree[node_idx];
 
             node.visits += 1;
 
@@ -228,23 +234,20 @@ impl Searcher {
             u = 1.0 - u;
             node.total_score += u;
 
-            node_idx = node.parent;
+            node_idx = node.parent as usize;
         }
     }
 
     fn select_best_move(&self, chess960: bool) -> (usize, f32) {
         let root = &self.tree[0];
 
-        let start = root.first_child as usize;
-        let end = start + root.child_count as usize;
-
-        assert!(start < end);
+        assert!(root.child_count > 0);
 
         let mut best = None;
         let mut best_visits = 0u32;
         let mut best_score = f32::NEG_INFINITY;
 
-        for node_idx in start..end {
+        for node_idx in root.children() {
             let node = &self.tree[node_idx];
             let score = node.q();
 
@@ -269,10 +272,10 @@ impl Searcher {
         let (best_child_root, best_score_root) = self.select_best_move(chess960);
         pv.push(self.tree[best_child_root].mv);
 
-        let mut node_idx = best_child_root as u32;
+        let mut node_idx = best_child_root;
 
         loop {
-            let node = &self.tree[node_idx as usize];
+            let node = &self.tree[node_idx];
 
             if node.result.is_terminal() || node.child_count == 0 {
                 break;
@@ -280,11 +283,11 @@ impl Searcher {
 
             let mut found_child = false;
 
-            let mut best_child = 0;
+            let mut best_child = 0usize;
             let mut best_child_score = f32::NEG_INFINITY;
 
-            for child in node.first_child..(node.first_child + u32::from(node.child_count)) {
-                let child_node = &self.tree[child as usize];
+            for child in node.children() {
+                let child_node = &self.tree[child];
 
                 if child_node.visits == 0 {
                     continue;
@@ -304,7 +307,7 @@ impl Searcher {
                 break;
             }
 
-            pv.push(self.tree[best_child as usize].mv);
+            pv.push(self.tree[best_child].mv);
             node_idx = best_child;
         }
 
@@ -333,7 +336,7 @@ impl Searcher {
             self.depth = 1;
 
             let leaf = self.select(params.cpuct, params.fpu);
-            let node = &self.tree[leaf as usize];
+            let node = &self.tree[leaf];
 
             if !node.result.is_terminal() {
                 self.expand(leaf);
